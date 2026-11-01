@@ -22,11 +22,12 @@ import { estadoScheduler } from "./scheduler.mjs";
 import { leerConsola, limpiarConsola } from "./consola.mjs";
 import { enviarBot, payloadPrueba, validarWebhook } from "./discord.mjs";
 import { FUENTES, IDS_FUENTES, verificarFuentes } from "./fuentes/index.mjs";
+import { TEMATICAS, tematicaPorId, itemEnTematica } from "./tematicas.mjs";
 import { itemCoincide } from "./matching.mjs";
 import { permitirEntrada, cortafuegosActivo, cortafuegosEntradaActivo } from "./cortafuegos.mjs";
 import { fechaBonita } from "./normalizar.mjs";
 
-const VERSION = "2.3.14";
+const VERSION = "2.3.15";
 const RAIZ_PUBLICO = join(fileURLToPath(new URL(".", import.meta.url)), "..", "publico");
 const TAM_PAGINA = 20;
 const MAX_CUERPO = 256 * 1024;
@@ -306,6 +307,7 @@ async function apiConvocatorias(res, url) {
   const tipo = p.get("tipo") || "";
   const ambito = p.get("ambito") || "";
   const fuente = p.get("fuente") || "";
+  const tematica = tematicaPorId(p.get("tematica") || "");
   const desde = (p.get("desde") || "").replace(/\D/g, "");
   const hasta = (p.get("hasta") || "").replace(/\D/g, "");
   const pagina = Math.max(parseInt(p.get("pagina") || "1", 10) || 1, 1);
@@ -338,14 +340,30 @@ async function apiConvocatorias(res, url) {
     params.push(`%${escapado}%`, `%${escapado}%`);
   }
   const donde = condiciones.length > 0 ? `WHERE ${condiciones.join(" AND ")}` : "";
-  const total = obtenerFila(`SELECT COUNT(*) AS n FROM Convocatoria ${donde}`, ...params).n;
-  const items = todas(
-    `SELECT id, identificador, titulo, departamento, fechaBOE, tipo, ambito, urlPdf, urlHtml, enriquecido, fuente FROM Convocatoria ${donde} ORDER BY fechaBOE DESC, titulo ASC LIMIT ? OFFSET ?`,
-    ...params,
-    TAM_PAGINA,
-    (pagina - 1) * TAM_PAGINA
-  ).map(normalizarBooleanos);
-  json(res, 200, { total, pagina, paginas: Math.max(Math.ceil(total / TAM_PAGINA), 1), items });
+  // Temática (v2.3.15): keywords con substring sin acentos sobre título +
+  // organismo. SQLite no sabe quitar acentos en LIKE, así que se filtra en JS:
+  // primero la consulta SQL con el resto de condiciones (sin LIMIT), luego el
+  // filtro de temática y la paginación en memoria. La base es personal (y se
+  // purga), con miles de filas como mucho: es barato. Tope de seguridad 20000.
+  if (!tematica) {
+    const total = obtenerFila(`SELECT COUNT(*) AS n FROM Convocatoria ${donde}`, ...params).n;
+    const items = todas(
+      `SELECT id, identificador, titulo, departamento, fechaBOE, tipo, ambito, urlPdf, urlHtml, enriquecido, fuente FROM Convocatoria ${donde} ORDER BY fechaBOE DESC, titulo ASC LIMIT ? OFFSET ?`,
+      ...params,
+      TAM_PAGINA,
+      (pagina - 1) * TAM_PAGINA
+    ).map(normalizarBooleanos);
+    json(res, 200, { total, pagina, paginas: Math.max(Math.ceil(total / TAM_PAGINA), 1), items });
+    return;
+  }
+  const filas = todas(
+    `SELECT id, identificador, titulo, departamento, fechaBOE, tipo, ambito, urlPdf, urlHtml, enriquecido, fuente FROM Convocatoria ${donde} ORDER BY fechaBOE DESC, titulo ASC LIMIT 20000`,
+    ...params
+  );
+  const coinciden = filas.filter((f) => itemEnTematica(f.titulo, f.departamento, tematica));
+  const total = coinciden.length;
+  const items = coinciden.slice((pagina - 1) * TAM_PAGINA, pagina * TAM_PAGINA).map(normalizarBooleanos);
+  json(res, 200, { total, pagina, paginas: Math.max(Math.ceil(total / TAM_PAGINA), 1), items, tematica: tematica.id });
 }
 
 function validarCuerpoAlerta(c) {
@@ -654,6 +672,10 @@ async function gestionar(req, res) {
       asegurarEsquemaUnaVez();
 
       if (ruta === "/api/health") return apiHealth(res);
+      if (ruta === "/api/tematicas") {
+        json(res, 200, { tematicas: TEMATICAS.map((t) => ({ id: t.id, nombre: t.nombre })) });
+        return;
+      }
       if (ruta === "/api/estado") return apiEstado(res);
       if (ruta === "/api/ingesta") return apiIngesta(req, res, url);
       if (ruta === "/api/convocatorias") return apiConvocatorias(res, url);

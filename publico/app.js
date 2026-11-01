@@ -318,6 +318,7 @@ $("boton-ingestar-fecha").addEventListener("click", async () => {
 // ─── Convocatorias ───────────────────────────────────────────────────────────
 
 let paginaConvs = 1;
+let tematicasCargadas = false;
 
 function rellenarSelectorFuentes() {
   const sel = $("b-fuente");
@@ -334,13 +335,32 @@ function rellenarSelectorFuentes() {
   sel.appendChild(oDemo);
 }
 
+// v2.3.15: temáticas del filtro de búsqueda (una sola vez, desde la API —
+// misma lista que usa el servidor para filtrar)
+async function rellenarSelectorTematicas() {
+  if (tematicasCargadas) return;
+  try {
+    const datos = await api("/api/tematicas");
+    const sel = $("b-tematica");
+    for (const t of datos.tematicas ?? []) {
+      const o = document.createElement("option");
+      o.value = t.id;
+      o.textContent = t.nombre;
+      sel.appendChild(o);
+    }
+    tematicasCargadas = true;
+  } catch {}
+}
+
 async function cargarConvocatorias() {
   rellenarSelectorFuentes();
+  await rellenarSelectorTematicas();
   const params = new URLSearchParams({ pagina: String(paginaConvs) });
   if ($("b-q").value.trim()) params.set("q", $("b-q").value.trim());
   if ($("b-tipo").value) params.set("tipo", $("b-tipo").value);
   if ($("b-ambito").value) params.set("ambito", $("b-ambito").value);
   if ($("b-fuente").value) params.set("fuente", $("b-fuente").value);
+  if ($("b-tematica").value) params.set("tematica", $("b-tematica").value);
   if ($("b-desde").value) params.set("desde", $("b-desde").value.replaceAll("-", ""));
   if ($("b-hasta").value) params.set("hasta", $("b-hasta").value.replaceAll("-", ""));
   try {

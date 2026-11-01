@@ -48,6 +48,11 @@ async function main() {
   const sinToken = await json("/api/discord/probar", { method: "POST" });
   ok("probar bot con canal y sin token → «Falta el token»", sinToken.status === 400 && /Falta el token/i.test(sinToken.data?.error ?? ""), sinToken.data?.error ?? "");
   await json("/api/ajustes", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ canalPorDefecto: null }) });
+  // 1c) v2.3.15: un Client Secret (sin puntos) se detecta antes de salir a Discord
+  await json("/api/ajustes", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ discordBotToken: "aB3xY9kL2mN8pQ5rT7vW1zC4eH6jU0sD", canalPorDefecto: "1134567890123456789" }) });
+  const secreto = await json("/api/discord/probar", { method: "POST" });
+  ok("token sin puntos (¿Client Secret?) detectado sin llamar a Discord", secreto.status === 200 && secreto.data?.ok === false && /no parece un token de bot/i.test(secreto.data?.detalle ?? ""), secreto.data?.detalle ?? "");
+  await json("/api/ajustes", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ discordBotToken: null, canalPorDefecto: null }) });
 
   // 2) validación de webhook inválido → 400
   const mala = await json("/api/alertas", {
@@ -151,6 +156,24 @@ async function main() {
   const porFuente = await json("/api/convocatorias?fuente=demo");
   ok("filtro fuente=demo", porFuente.data?.total === 20, `total=${porFuente.data?.total}`);
 
+  // 8b) v2.3.15: filtro de temática (substring sin acentos sobre título+organismo)
+  const temList = await json("/api/tematicas");
+  ok("endpoint de temáticas con 10 temáticas", (temList.data?.tematicas ?? []).length === 10, (temList.data?.tematicas ?? []).map((t) => t.id).join(","));
+  const temTic = await json("/api/convocatorias?tematica=tic");
+  ok(
+    "temática tic caza TIC e informática (sin acentos)",
+    (temTic.data?.total ?? 0) >= 2 && temTic.data.items.some((i) => /TIC/i.test(i.titulo)) && temTic.data.items.some((i) => /inform/i.test(i.titulo)),
+    `total=${temTic.data?.total} — ${temTic.data?.items.map((i) => i.titulo).slice(0, 3).join(" | ")}`
+  );
+  const temPol = await json("/api/convocatorias?tematica=policia");
+  ok(
+    "temática policia caza la Escala Básica de Policía Nacional",
+    temPol.data?.total >= 1 && temPol.data.items.some((i) => /polic/i.test(i.titulo)),
+    `total=${temPol.data?.total} — ${temPol.data?.items.map((i) => i.titulo).slice(0, 2).join(" | ")}`
+  );
+  const temTicLab = await json("/api/convocatorias?tematica=tic&tipo=convocatoria");
+  ok("temática se combina con los otros filtros", temTicLab.data?.total <= temTic.data?.total && temTicLab.data.items.every((i) => i.tipo === "convocatoria"), `total=${temTicLab.data?.total}`);
+
   // 9) probar alerta laboral (mensaje de prueba + coincidencias 7 días)
   const proba = await json(`/api/alertas/alerta-empleo-laboral/probar`, { method: "POST" });
   ok("probar alerta personal laboral envía a Discord", proba.data?.envio?.ok === true, proba.data?.envio?.detalle);
@@ -185,7 +208,7 @@ async function main() {
   ok("estado: 20 convocatorias guardadas", est.data?.stats?.totalConvocatorias === 20, `total=${est.data?.stats?.totalConvocatorias}`);
   ok("estado: notificaciones OK >= 9", (est.data?.stats?.notificacionesOk ?? 0) >= 9, `ok=${est.data?.stats?.notificacionesOk}`);
   ok("estado: 16 boletines en el registro de fuentes", (est.data?.fuentes ?? []).length === 16, `fuentes=${(est.data?.fuentes ?? []).length}`);
-  ok("estado: versión 2.3.14", est.data?.version === "2.3.14", `version=${est.data?.version}`);
+  ok("estado: versión 2.3.15", est.data?.version === "2.3.15", `version=${est.data?.version}`);
 }
 
 main().catch((e) => {

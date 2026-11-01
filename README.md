@@ -1,4 +1,4 @@
-# OpoAlerta Docker v2.3.14
+# OpoAlerta Docker v2.3.15
 
 Alertas personales de **ofertas de empleo público** (oposiciones, personal laboral, bolsas): ingesta diaria del **BOE y de 15 boletines oficiales más**, panel web local y avisos automáticos a **Discord**.
 
@@ -19,6 +19,11 @@ node servidor/indice.mjs    # panel en http://localhost:3000
 ```
 
 ---
+
+## Novedades v2.3.15
+
+- **Filtro de temática en la búsqueda**: desplegable nuevo junto a Boletín con 10 temáticas — Informática·TIC, Personal laboral, Sanidad, Educación·Docencia, Defensa·Militares, Ingeniería·Obra, Administración·Gestión, Justicia, Policía·Seguridad y Bomberos·Emergencias (`GET /api/tematicas` + filtro en `GET /api/convocatorias?tematica=…`). Cada temática es una lista de palabras/frases que se buscan como substring **sin acentos** en título + organismo (mismo motor que las alertas); las keywords cortas (≤4 letras, p. ej. «tic») solo cuentan como **palabra completa** para que «matemáticas» o «auténtico» no cuelen. Se combina con todos los demás filtros (texto, tipo, ámbito, boletín, fechas).
+- **Diagnóstico del 401 del bot**: si lo pegado como token no tiene la forma de token de bot (dos puntos, p. ej. `MTIz…​.XXX.YYY`), la app ni llama a Discord: responde directamente «Eso no parece un token de bot: probablemente copiaste el Client Secret» (el token se copia en discord.com/developers → tu aplicación → **Bot → Reset Token → Copy**). Y si Discord devuelve 401, el detalle ahora explica la vía completa (regenerar token → pegar el nuevo). El texto de ayuda bajo el campo del token también lo aclara.
 
 ## Novedades v2.3.14
 
@@ -247,5 +252,6 @@ node scripts/prueba-fuentes.mjs 20261031    # ingesta real de los 16 boletines (
 - **v2.3.12**: portal europeo (EPSO) arreglado — la plataforma se mudó a `selection.eu-careers.europa.eu` y el redirect moría en las listas blancas de app y proxy (ahora directo al dominio nuevo, ambos hosts permitidos); alerta precargada «Informática · TIC · Grupos A1/A2» + plantillas de un clic en el formulario de alertas; GUI minimalista sin marca en cabecera y pie.
 - **v2.3.13**: botón «Probar bot» de Discord en Ajustes (`POST /api/discord/probar`, con mensajes precisos de qué falta: token o canal) y aviso panel si hay token sin canal; reintentos ante 5xx en `postFormulario` (DOGC y cualquier fuente POST) con detalle explicativo; pie «Sin telemetría…» eliminado.
 - **v2.3.14**: reintentos de la v2.3.13 retirados a petición (la ingesta vuelve al comportamiento de la v2.3.12); el resto de la v2.3.13 se conserva intacto.
+- **v2.3.15**: filtro de temática en la búsqueda (10 temáticas, substring sin acentos sobre título+organismo, keywords cortas por palabra completa; endpoint `GET /api/tematicas`); diagnóstico del 401 del bot — detección del Client Secret antes de llamar a Discord y mensajes con la vía exacta del token.
 
 Datos de los boletines oficiales: reutilización permitida citando la fuente (ver licencia de cada uno en el panel). Código inspirado en [opoalerta/opoalerta](https://github.com/opoalerta/opoalerta).

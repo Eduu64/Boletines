@@ -104,7 +104,7 @@ async function postear(url, cabeceras, payload) {
   } catch {
     /* sin cuerpo */
   }
-  if (res.status === 401) return { ok: false, detalle: `Token del bot no válido (401)${extra}` };
+  if (res.status === 401) return { ok: false, detalle: `Token del bot no válido (401)${extra} — cópialo otra vez de discord.com/developers → tu aplicación → Bot → Reset Token → Copy (si lo regeneraste, el anterior deja de valer; el Client Secret no sirve)` };
   if (res.status === 403) return { ok: false, detalle: `Permisos insuficientes en el canal (403)${extra}` };
   if (res.status === 404) return { ok: false, detalle: `Webhook o canal no encontrado (404)${extra}` };
   return { ok: false, detalle: `HTTP ${res.status}${extra}` };
@@ -118,12 +118,21 @@ export function enviarWebhook(webhookUrl, payload) {
   return postear(webhookUrl, {}, payload);
 }
 
-/** Envía como bot de Discord a un canal concreto (modo global). */
+/** Envía como bot de Discord a un canal concreto (modo global).
+ * Antes de salir comprueba la forma del token: un token de bot SIEMPRE tiene
+ * dos puntos (id.sello.firma, en base64url, p. ej. MTIzNDU2Nzg5…​.XXX.YYY). Si
+ * lo pegado no los tiene, casi seguro que es el Client Secret (o un token
+ * mal copiado): mejor decírselo al usuario que dejar que Discord responda un
+ * 401 críptico (v2.3.15). */
 export function enviarBot(token, canalId, payload) {
   const canal = canalId.replace(/\D/g, "");
   if (!canal) return Promise.resolve({ ok: false, detalle: "ID de canal no válido" });
-  if (!token || token.length < 20) return Promise.resolve({ ok: false, detalle: "Token del bot no configurado" });
-  return postear(`${API_DISCORD}/channels/${canal}/messages`, { Authorization: `Bot ${token.trim()}` }, payload);
+  if (!token || token.trim().length < 20) return Promise.resolve({ ok: false, detalle: "Token del bot no configurado" });
+  const limpio = token.trim();
+  if (!/^\S+\.\S+\.\S+$/.test(limpio)) {
+    return Promise.resolve({ ok: false, detalle: "Eso no parece un token de bot (los tokens de bot tienen dos puntos, p. ej. MTIzNDU2Nzg5….XXX.YYY): probablemente copiaste el Client Secret. El token se copia en discord.com/developers → tu aplicación → Bot → Reset Token → Copy" });
+  }
+  return postear(`${API_DISCORD}/channels/${canal}/messages`, { Authorization: `Bot ${limpio}` }, payload);
 }
 
 /** Mensaje de prueba para verificar la configuración desde la web. */
