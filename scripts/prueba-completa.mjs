@@ -1,4 +1,4 @@
-// Batería completa de pruebas de OpoAlerta v2.3.3.
+// Batería completa de pruebas de OpoAlerta v2.3.4.
 // Uso: node scripts/prueba-completa.mjs
 // 1) fixtures offline de los 16 parsers   2) matching offline (personal laboral…)
 // 3) arranca BOE falso + receptor de webhooks + la app

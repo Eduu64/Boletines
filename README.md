@@ -1,4 +1,4 @@
-# OpoAlerta Docker v2.3.3
+# OpoAlerta Docker v2.3.4
 
 Alertas personales de **ofertas de empleo público** (oposiciones, personal laboral, bolsas): ingesta diaria del **BOE y de 15 boletines oficiales más**, panel web local y avisos automáticos a **Discord**.
 
@@ -19,6 +19,10 @@ node servidor/indice.mjs    # panel en http://localhost:3000
 ```
 
 ---
+
+## Novedades v2.3.4
+
+- **Adiós al problema de permisos de `./data`**: la base de datos pasa a un **volumen con nombre** (`opoalerta-data`) en ambos compose. Con la carpeta `./data` montada desde el host pasaba esto: si la carpeta no existía, Docker la creaba como **root**, y la app (usuario sin privilegios `opoalerta`) no podía escribir su SQLite — y crearla a mano no arreglaba nada salvo que acertaras con el uid exacto del contenedor. El volumen con nombre se inicializa **con el dueño de `/app/data` en la imagen** (comportamiento estándar de Docker), así que funciona a la primera y sin tocar el host. Nombre fijo: estable aunque renombres la carpeta del proyecto. OJO: `docker compose down` conserva el volumen; **`down -v` lo borra** (con la base de datos dentro). Copia de seguridad y migración: ver «Tus datos» más abajo.
 
 ## Novedades v2.3.3
 
@@ -67,7 +71,7 @@ node servidor/indice.mjs    # panel en http://localhost:3000
 | **Panel web** | HTML + JS vanilla (4 pestañas: Panel, Convocatorias, Alertas, Sistema) + página «Estado del servicio». Sin framework, sin build |
 | **Alertas** | Palabras clave (modo «todas»/«cualquiera»), organismo, ámbito, solo-convocatorias; matching sin acentos ni puntuación |
 | **Avisos** | Discord: bot global (token + canal) o webhook por alerta. Reintentos ante rate-limit |
-| **Base de datos** | SQLite con `node:sqlite` (integrada en Node). WAL, esquema idempotente, compatible con la v1.2.0 (misma base se reutiliza) |
+| **Base de datos** | SQLite con `node:sqlite` (integrada en Node). WAL, esquema idempotente, compatible con la v1.2.0 (misma base se reutiliza). Vive en el volumen Docker `opoalerta-data` (permisos correctos sin tocar el host) |
 | **Programador** | Cron propio (5 campos, `* , - /`) dentro del proceso. Ingesta 09:00 + reintento 11:35 (hora de España) y *backfill* de los días perdidos al arrancar |
 | **Seguridad** | CSP estricta (todo `self`, sin inline), `X-Frame-Options DENY`, `nosniff`, `Referrer-Policy`, webhook solo Discord (o localhost en pruebas), comparación de token en tiempo constante, límite de escrituras por IP, usuario no root, `cap_drop ALL` |
 
@@ -108,7 +112,27 @@ En el BOE, la **2A es «Nombramientos, situaciones e incidencias»**: solo comun
 
 **El panel solo al alcance de tu red (v2.3.3)**: el espejo del cortafuegos de salida — ahora también de **entrada**. La app mira la IP de origen de cada petición y solo sirve el panel a IPs privadas (tu LAN, redes Docker y loopback); una IP pública recibe un 403 inmediato (`CORTAFUEGOS_ENTRADA=lan` por defecto). Por eso el puerto puede publicarse en todas las interfaces sin miedo: internet no obtiene respuesta. Capa extra opcional: `PUERTO_PUBLICADO=<IP-LAN>` hace que Docker ni siquiera escuche en la interfaz pública. Es todo lógica de la app y publicación estándar de Docker: nada de iptables del host, nada del sistema operativo.
 
-**Todo dentro de Docker, nada del sistema operativo**: el modo reforzado son dos contenedores (app + proxy Squid) y dos redes internas de Docker. No se instala nada en el host, no se toca iptables ni ufw, no hay servicios ni usuarios nuevos del sistema: el aislamiento lo hace Docker con `internal: true` y el filtrado lo hace el contenedor del proxy. Lo único que Docker publica fuera, como siempre, es el puerto del panel y la carpeta `data/` del propio proyecto.
+**Todo dentro de Docker, nada del sistema operativo**: el modo reforzado son dos contenedores (app + proxy Squid) y dos redes internas de Docker. No se instala nada en el host, no se toca iptables ni ufw, no hay servicios ni usuarios nuevos del sistema: el aislamiento lo hace Docker con `internal: true` y el filtrado lo hace el contenedor del proxy. Lo único que Docker publica fuera, como siempre, es el puerto del panel y el volumen con nombre `opoalerta-data` (la base de datos).
+
+## Tus datos: dónde viven y cómo copiarlos
+
+Desde v2.3.4 la base de datos vive en el **volumen con nombre** `opoalerta-data` (no en la carpeta `./data` del proyecto): Docker le da los permisos correctos solo, y sobrevive a `docker compose down`, `up --build` y reinicios del servidor.
+
+```bash
+# Copia de seguridad (desde la carpeta donde tengas el proyecto):
+docker run --rm -v opoalerta-data:/datos -v "$PWD":/respaldo alpine \
+  tar czf /respaldo/opoalerta-datos-$(date +%F).tgz -C /datos .
+
+# Restaurar una copia (con el stack parado):
+docker run --rm -v opoalerta-data:/datos -v "$PWD":/respaldo alpine sh -c \
+  "cd /datos && tar xzf /respaldo/opoalerta-datos-AAAA-MM-DD.tgz && chown -R $(docker run --rm opoalerta-docker:2.3.4 id -u):$(docker run --rm opoalerta-docker:2.3.4 id -g) /datos"
+
+# ¿Venías de un despliegue anterior con ./data y quieres conservarla? (una vez)
+docker run --rm -v opoalerta-data:/datos -v "$PWD/data":/origen alpine sh -c \
+  "cp -r /origen/. /datos/ && chown -R $(docker run --rm opoalerta-docker:2.3.4 id -u):$(docker run --rm opoalerta-docker:2.3.4 id -g) /datos"
+```
+
+El volumen es el mismo en el modo normal y en el reforzado, así que puedes alternar entre ellos sin perder nada. ¿Prefieres volver a la carpeta visible `./data`? Cambia el `volumes:` del compose a `- ./data:/app/data` — pero entonces asegúrate de que `./data` pertenezca al uid del usuario del contenedor (`docker exec opoalerta id -u`), o la app no podrá escribir.
 
 La app solo inicia conexiones HTTPS (443) hacia los portales oficiales y Discord:
 
@@ -157,5 +181,6 @@ node scripts/prueba-fuentes.mjs 20261031    # ingesta real de los 16 boletines (
 - **v2.3.1**: modo reforzado opcional con **proxy interno Squid** (red Docker sin internet + lista blanca a nivel de red; `docker-compose.reforzado.yml`, `proxy/`, `scripts/prueba-proxy.sh`).
 - **v2.3.2**: el panel se publica por defecto solo en `127.0.0.1` (nunca desde internet); `PUERTO_PUBLICADO` abre el acceso a tu red local y solo a ella.
 - **v2.3.3**: **cortafuegos de entrada** — la app solo sirve el panel a IPs privadas (tu LAN); una IP pública de internet recibe un 403 inmediato (`CORTAFUEGOS_ENTRADA=lan`). La publicación vuelve a `0.0.0.0` para que tu LAN entre sin tocar nada, con el filtro en la app como portero.
+- **v2.3.4**: la base de datos pasa de `./data` (bind mount con problemas de permisos: Docker creaba la carpeta como root y la app no podía escribir) a un **volumen con nombre** `opoalerta-data` (permisos correctos desde la imagen, estable entre modos y renombres de carpeta; `down -v` lo borra — ver «Tus datos»).
 
 Datos de los boletines oficiales: reutilización permitida citando la fuente (ver licencia de cada uno en el panel). Código inspirado en [opoalerta/opoalerta](https://github.com/opoalerta/opoalerta).

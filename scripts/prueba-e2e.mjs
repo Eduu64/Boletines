@@ -175,7 +175,7 @@ async function main() {
   ok("estado: 20 convocatorias guardadas", est.data?.stats?.totalConvocatorias === 20, `total=${est.data?.stats?.totalConvocatorias}`);
   ok("estado: notificaciones OK >= 9", (est.data?.stats?.notificacionesOk ?? 0) >= 9, `ok=${est.data?.stats?.notificacionesOk}`);
   ok("estado: 16 boletines en el registro de fuentes", (est.data?.fuentes ?? []).length === 16, `fuentes=${(est.data?.fuentes ?? []).length}`);
-  ok("estado: versión 2.3.3", est.data?.version === "2.3.3", `version=${est.data?.version}`);
+  ok("estado: versión 2.3.4", est.data?.version === "2.3.4", `version=${est.data?.version}`);
 }
 
 main().catch((e) => {

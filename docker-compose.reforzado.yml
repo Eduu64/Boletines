@@ -1,5 +1,5 @@
 # ─────────────────────────────────────────────────────────────────────────────
-# OpoAlerta Docker v2.3.3 · MODO REFORZADO (proxy interno de salida)
+# OpoAlerta Docker v2.3.4 · MODO REFORZADO (proxy interno de salida)
 #
 #   docker compose -f docker-compose.reforzado.yml up -d --build
 #
@@ -33,7 +33,7 @@
 services:
   opoalerta:
     build: .
-    image: opoalerta-docker:2.3.3
+    image: opoalerta-docker:2.3.4
     container_name: opoalerta
     restart: unless-stopped
     ports:
@@ -72,7 +72,16 @@ services:
       NO_PROXY: localhost,127.0.0.1,proxy
       no_proxy: localhost,127.0.0.1,proxy
     volumes:
-      - ./data:/app/data
+      # Volumen con NOMBRE (no ./data del host): Docker lo inicializa con el
+      # dueño de /app/data en la imagen (usuario opoalerta), así que la base de
+      # datos siempre tiene permisos correctos sin tocar el host. El nombre
+      # explícito lo hace estable aunque renombres la carpeta del proyecto.
+      # OJO: «docker compose down» lo conserva; «down -v» lo BORRA.
+      # ¿Prefieres la carpeta ./data visible del proyecto? Sustitúyelo por
+      # «- ./data:/app/data» y asegúrate de que ./data pertenezca al mismo uid
+      # que el usuario del contenedor («docker exec opoalerta id -u»), o la app
+      # no podrá escribir la base de datos.
+      - opoalerta-data:/app/data
     networks: [interna]
     # Contenedor endurecido y ligero: sin privilegios y con techo de memoria
     mem_limit: ${LIMITE_MEMORIA:-256m}
@@ -91,7 +100,7 @@ services:
 
   proxy:
     build: ./proxy
-    image: opoalerta-proxy:2.3.3
+    image: opoalerta-proxy:2.3.4
     container_name: opoalerta-proxy
     restart: unless-stopped
     networks: [interna, salida]
@@ -110,3 +119,7 @@ networks:
   interna:
     internal: true # sin ruta a internet ni a tu LAN
   salida:
+
+volumes:
+  opoalerta-data:
+    name: opoalerta-data # nombre fijo: estable aunque cambie el nombre de la carpeta
