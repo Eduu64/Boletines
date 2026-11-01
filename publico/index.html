@@ -183,12 +183,12 @@
               <select id="aj-fuente"><option value="real">Boletines reales (BOE + autonómicos)</option><option value="demo">Modo demo (datos de ejemplo)</option></select>
               <p class="ayuda oculto" id="aj-fuente-aviso">Estás en modo demo: las ingestas usan datos de ejemplo realistas para verificar alertas y notificaciones sin depender de boe.es.</p>
             </div>
-            <div class="campo"><label for="aj-token">Token del bot de Discord (global)</label><input id="aj-token" type="password" placeholder="MTIzNDU2Nzg5MDEy…" /><p class="ayuda" id="aj-token-ayuda">Se guarda en la base de datos local.</p></div>
-            <div class="campo"><label for="aj-canal">Canal por defecto del bot</label><input id="aj-canal" placeholder="ID del canal, p. ej. 1134567890123456789" /></div>
+            <div class="campo"><label for="aj-token">Token del bot de Discord (global)</label><input id="aj-token" type="password" placeholder="MTIzNDU2Nzg5MDEy…" /><p class="ayuda" id="aj-token-ayuda">Se guarda en la base de datos local. El bot necesita token <b>y</b> canal: con solo el token no envía nada.</p></div>
+            <div class="campo"><label for="aj-canal">Canal por defecto del bot</label><input id="aj-canal" placeholder="ID del canal, p. ej. 1134567890123456789" /><p class="ayuda oculto" id="aj-bot-aviso">⚠️ Hay token pero falta el canal por defecto: hasta que no pongas un canal aquí (o un canal en cada alerta), el bot no escribirá en ningún sitio.</p></div>
             <div class="interruptor"><label for="aj-enr">Enriquecer ámbito geográfico<br /><span class="ayuda">Consulta cada documento del BOE: estatal / autonómico / provincial / local</span></label><input type="checkbox" id="aj-enr" checked /></div>
             <div class="interruptor"><label for="aj-sinnov">Avisar cuando no haya novedades<br /><span class="ayuda">Envía un «sin coincidencias hoy» a las alertas con destino</span></label><input type="checkbox" id="aj-sinnov" /></div>
             <div class="campo"><label for="aj-purga">Purgar anuncios con más de X días (0 = nunca)</label><input id="aj-purga" type="number" min="0" max="3650" value="180" /><p class="ayuda">Recomendado: 180 días para mantener la base ligera.</p></div>
-            <button class="boton" id="boton-guardar-ajustes">💾 Guardar ajustes</button>
+            <div class="botones-fila"><button class="boton" id="boton-guardar-ajustes">💾 Guardar ajustes</button><button class="boton secundario" id="boton-probar-bot">🔊 Probar bot</button></div>
           </div>
         </div>
 
@@ -286,8 +286,6 @@
       </div>
     </section>
   </main>
-
-  <footer class="pie">Sin telemetría · todo en local · datos de los boletines oficiales</footer>
 
   <!-- Diálogo de edición de alerta -->
   <dialog id="dialogo-alerta">

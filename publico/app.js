@@ -159,6 +159,9 @@ function pintarEstado() {
     $("aj-enr").checked = estado.ajustes.enriquecer !== false;
     $("aj-sinnov").checked = estado.ajustes.notificarSinNovedades === true;
     $("aj-token").placeholder = estado.ajustes.tieneToken ? `configurado (${estado.ajustes.discordBotToken}) — déjalo vacío para mantenerlo` : "MTIzNDU2Nzg5MDEy…";
+    // v2.3.13: aviso visible cuando hay token pero falta el canal por defecto
+    // (con solo el token el bot no envía nada — error clásico al configurarlo)
+    $("aj-bot-aviso").classList.toggle("oculto", !(estado.ajustes.tieneToken && !estado.ajustes.canalPorDefecto));
     activas = estado.ajustes.fuentesActivas; // null = todas
     pintarFuentes();
     $("aj-fuente-aviso").classList.toggle("oculto", estado.ajustes.fuente !== "demo");
@@ -572,6 +575,25 @@ $("boton-guardar-ajustes").addEventListener("click", async () => {
   } catch (e) {
     aviso("No se pudieron guardar los ajustes", e.message, true);
   } finally { boton.disabled = false; }
+});
+
+// v2.3.13: prueba del bot global — envía un mensaje de verdad al canal por
+// defecto. Si falta el token o el canal, la API responde 400 con la pieza
+// que falta, así que el fallo se ve aquí y no cuando ya corre la ingesta.
+$("boton-probar-bot").addEventListener("click", async () => {
+  const boton = $("boton-probar-bot");
+  boton.disabled = true;
+  boton.textContent = "⏳ Probando…";
+  try {
+    const datos = await api("/api/discord/probar", { method: "POST" });
+    if (datos.ok) aviso("Prueba enviada a Discord", `${datos.detalle} — mira el canal por defecto`);
+    else aviso("El bot no pudo enviar", datos.detalle, true);
+  } catch (e) {
+    aviso("No se pudo probar el bot", e.message, true);
+  } finally {
+    boton.disabled = false;
+    boton.textContent = "🔊 Probar bot";
+  }
 });
 
 function pintarFuentes() {

@@ -1,4 +1,4 @@
-# OpoAlerta Docker v2.3.12
+# OpoAlerta Docker v2.3.14
 
 Alertas personales de **ofertas de empleo público** (oposiciones, personal laboral, bolsas): ingesta diaria del **BOE y de 15 boletines oficiales más**, panel web local y avisos automáticos a **Discord**.
 
@@ -19,6 +19,16 @@ node servidor/indice.mjs    # panel en http://localhost:3000
 ```
 
 ---
+
+## Novedades v2.3.14
+
+- **Reintentos retirados**: la v2.3.13 añadió reintentos automáticos ante 5xx en `postFormulario` (para el DOGC); no aportan valor en el despliegue real y se quitan — el comportamiento de ingesta vuelve a ser el de la v2.3.12. Nada más cambia: el botón «Probar bot», el aviso token-sin-canal y el pie eliminado se mantienen tal cual.
+
+## Novedades v2.3.13
+
+- **Bot de Discord verificable desde la web**: botón **«🔊 Probar bot»** en Ajustes generales — envía un mensaje de verdad al canal por defecto (`POST /api/discord/probar`). Si algo falta, el fallo se ve al instante y no cuando ya corre la ingesta: sin token y sin canal → «Sin bot configurado…»; con canal pero sin token → «Falta el token del bot»; con token pero sin canal → «…con solo el token el bot no sabe a dónde escribir». Ese era el fallo clásico: **el bot necesita token Y canal** (el campo «Canal por defecto» está justo debajo del token; si no, un canal en cada alerta). Además el panel avisa en rojo si hay token pero no canal.
+- **DOGC con reintentos**: el servicio del DOGC (Generalitat) devuelve HTTP 500 de forma intermitente desde algunas IPs — no es el cortafuegos (`portaldogc.gencat.cat` y `dogc.gencat.cat` ya estaban en las dos listas blancas). Ahora `postFormulario` reintenta 2 veces (esperas de 700 ms y 1,4 s) ante 5xx y fallos de red, y si sigue fallando el detalle del panel lo dice claramente: «el servicio del DOGC falla de forma intermitente; prueba a ingestar de nuevo en unos minutos».
+- **Pie eliminado** en panel y página de estado: la GUI se queda sin la línea «Sin telemetría · todo en local».
 
 ## Novedades v2.3.12
 
@@ -235,5 +245,7 @@ node scripts/prueba-fuentes.mjs 20261031    # ingesta real de los 16 boletines (
 - **v2.3.10**: corregido el empaquetado del frontal de la v2.3.9 (con `build: ./frontal` los `COPY` fallaban siempre: «/frontal/frontal.mjs not found»; ahora `context: .` + `dockerfile: frontal/Dockerfile`) y `.dockerignore` en la raíz (contextos de build mínimos; el `.env` nunca sube al demonio).
 - **v2.3.11**: rendimiento del panel — esquema comprobado una vez por proceso (antes: ~27 DDL por petición), caché de 3 s en `/api/estado` (invalidada en escrituras), índice `IngestaLog(fuente, fechaBOE, createdAt)` para el estado por fuente, repintado del frontend solo si el estado cambió y sondeo en pausa con la pestaña oculta; registro de peticiones >800 ms.
 - **v2.3.12**: portal europeo (EPSO) arreglado — la plataforma se mudó a `selection.eu-careers.europa.eu` y el redirect moría en las listas blancas de app y proxy (ahora directo al dominio nuevo, ambos hosts permitidos); alerta precargada «Informática · TIC · Grupos A1/A2» + plantillas de un clic en el formulario de alertas; GUI minimalista sin marca en cabecera y pie.
+- **v2.3.13**: botón «Probar bot» de Discord en Ajustes (`POST /api/discord/probar`, con mensajes precisos de qué falta: token o canal) y aviso panel si hay token sin canal; reintentos ante 5xx en `postFormulario` (DOGC y cualquier fuente POST) con detalle explicativo; pie «Sin telemetría…» eliminado.
+- **v2.3.14**: reintentos de la v2.3.13 retirados a petición (la ingesta vuelve al comportamiento de la v2.3.12); el resto de la v2.3.13 se conserva intacto.
 
 Datos de los boletines oficiales: reutilización permitida citando la fuente (ver licencia de cada uno en el panel). Código inspirado en [opoalerta/opoalerta](https://github.com/opoalerta/opoalerta).

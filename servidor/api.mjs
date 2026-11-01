@@ -20,13 +20,13 @@ import { asegurarEsquema, obtenerFila, todas, ejecutar, nuevoId, hoyIsoUtc, norm
 import { ejecutarIngesta, fechaHoyMadrid, obtenerAjustes, probarDestino, ingestaEnCurso } from "./ingesta.mjs";
 import { estadoScheduler } from "./scheduler.mjs";
 import { leerConsola, limpiarConsola } from "./consola.mjs";
-import { validarWebhook } from "./discord.mjs";
+import { enviarBot, payloadPrueba, validarWebhook } from "./discord.mjs";
 import { FUENTES, IDS_FUENTES, verificarFuentes } from "./fuentes/index.mjs";
 import { itemCoincide } from "./matching.mjs";
 import { permitirEntrada, cortafuegosActivo, cortafuegosEntradaActivo } from "./cortafuegos.mjs";
 import { fechaBonita } from "./normalizar.mjs";
 
-const VERSION = "2.3.12";
+const VERSION = "2.3.14";
 const RAIZ_PUBLICO = join(fileURLToPath(new URL(".", import.meta.url)), "..", "publico");
 const TAM_PAGINA = 20;
 const MAX_CUERPO = 256 * 1024;
@@ -494,6 +494,33 @@ async function apiAlertaProbar(req, res, id) {
   });
 }
 
+/** Prueba del bot global de Discord desde Ajustes (v2.3.13): envía un mensaje
+ * de prueba al canal por defecto con el token guardado. Antes de salir
+ * comprueba que las dos piezas existan — con solo el token el bot no envía
+ * nada y hasta ahora eso se descubría tarde, cuando la ingesta ya corría. */
+async function apiDiscordProbar(req, res, metodo) {
+  if (metodo !== "POST") {
+    json(res, 405, { error: "Método no permitido" });
+    return;
+  }
+  const ajustes = obtenerAjustes();
+  const token = ajustes.discordBotToken || process.env.DISCORD_BOT_TOKEN || "";
+  const canal = ajustes.canalPorDefecto || process.env.DISCORD_CANAL_ID || "";
+  if (!token && !canal) {
+    json(res, 400, { error: "Sin bot configurado: pega el token del bot y el ID del canal por defecto en Ajustes generales y guarda" });
+    return;
+  }
+  if (!token) {
+    json(res, 400, { error: "Falta el token del bot (Ajustes generales o DISCORD_BOT_TOKEN)" });
+    return;
+  }
+  if (!canal) {
+    json(res, 400, { error: "Falta el canal por defecto del bot (Ajustes generales o DISCORD_CANAL_ID): con solo el token el bot no sabe a dónde escribir" });
+    return;
+  }
+  json(res, 200, await enviarBot(token, canal, payloadPrueba("bot de Discord")));
+}
+
 function conFuentesActivas(a) {
   return { ...normalizarBooleanos(a), discordBotToken: a.discordBotToken ? `••••${a.discordBotToken.slice(-4)}` : null, tieneToken: !!a.discordBotToken, fuentesActivas: normalizarFuentesActivas(a.fuentesActivas) };
 }
@@ -641,6 +668,7 @@ async function gestionar(req, res) {
       if (mAlerta) return apiAlertaId(req, res, url, decodeURIComponent(mAlerta[1]));
       const mProbar = /^\/api\/alertas\/([^/]+)\/probar$/.exec(ruta);
       if (mProbar) return apiAlertaProbar(req, res, decodeURIComponent(mProbar[1]));
+      if (ruta === "/api/discord/probar") return apiDiscordProbar(req, res, metodo);
       json(res, 404, { error: "Ruta no encontrada" });
       return;
     }

@@ -39,6 +39,16 @@ async function main() {
   });
   ok("ajustes en modo demo", ajustes.status === 200 && ajustes.data.ajustes.fuente === "demo");
 
+  // 1b) v2.3.13: prueba del bot global — sin nada configurado → 400 con la
+  // pieza que falta; con canal pero sin token → «Falta el token»; luego se
+  // restablece el canal a null para no alterar el resto de la batería.
+  const sinBot = await json("/api/discord/probar", { method: "POST" });
+  ok("probar bot sin token ni canal → 400 explicativo", sinBot.status === 400 && /token/i.test(sinBot.data?.error ?? ""), sinBot.data?.error ?? "");
+  await json("/api/ajustes", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ canalPorDefecto: "1134567890123456789" }) });
+  const sinToken = await json("/api/discord/probar", { method: "POST" });
+  ok("probar bot con canal y sin token → «Falta el token»", sinToken.status === 400 && /Falta el token/i.test(sinToken.data?.error ?? ""), sinToken.data?.error ?? "");
+  await json("/api/ajustes", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ canalPorDefecto: null }) });
+
   // 2) validación de webhook inválido → 400
   const mala = await json("/api/alertas", {
     method: "POST",
@@ -175,7 +185,7 @@ async function main() {
   ok("estado: 20 convocatorias guardadas", est.data?.stats?.totalConvocatorias === 20, `total=${est.data?.stats?.totalConvocatorias}`);
   ok("estado: notificaciones OK >= 9", (est.data?.stats?.notificacionesOk ?? 0) >= 9, `ok=${est.data?.stats?.notificacionesOk}`);
   ok("estado: 16 boletines en el registro de fuentes", (est.data?.fuentes ?? []).length === 16, `fuentes=${(est.data?.fuentes ?? []).length}`);
-  ok("estado: versión 2.3.12", est.data?.version === "2.3.12", `version=${est.data?.version}`);
+  ok("estado: versión 2.3.14", est.data?.version === "2.3.14", `version=${est.data?.version}`);
 }
 
 main().catch((e) => {
