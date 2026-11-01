@@ -1,4 +1,4 @@
-# OpoAlerta Docker v2.3.15
+# OpoAlerta Docker v2.3.16
 
 Alertas personales de **ofertas de empleo público** (oposiciones, personal laboral, bolsas): ingesta diaria del **BOE y de 15 boletines oficiales más**, panel web local y avisos automáticos a **Discord**.
 
@@ -19,6 +19,11 @@ node servidor/indice.mjs    # panel en http://localhost:3000
 ```
 
 ---
+
+## Novedades v2.3.16
+
+- **Buscador maquetado con rejilla fija**: con la llegada del filtro de Temática la fila de filtros del buscador (flexbox con wrap) partía la línea donde pillara — en muchas ventanas quedaba una fila de 6 campos apretados y «Hasta» huérfana abajo, estirada a todo lo ancho. Ahora es una **rejilla determinista**: fila 1 = Buscar + Temática (los dos filtros de contenido, anchos); fila 2 = Tipo, Ámbito, Boletín, Desde, Hasta y el botón Buscar, todos iguales. En tablet (700-999 px) se ordena en 2 columnas holgadas y en móvil (<700 px) todo apila a una columna. Verificado a 1440/1280/1024/900/768/390 px.
+- **CSS/JS sin caché agresiva del navegador**: los estáticos iban con `Cache-Control: max-age=3600` y, al actualizar el contenedor, el navegador seguía pintando la interfaz vieja hasta una hora (típico «he actualizado y no cambia nada»). Ahora `no-cache`: el navegador revalida siempre y los cambios de interfaz se ven al refrescar. Ficheros diminutos en LAN — el coste es despreciable.
 
 ## Novedades v2.3.15
 
@@ -253,5 +258,6 @@ node scripts/prueba-fuentes.mjs 20261031    # ingesta real de los 16 boletines (
 - **v2.3.13**: botón «Probar bot» de Discord en Ajustes (`POST /api/discord/probar`, con mensajes precisos de qué falta: token o canal) y aviso panel si hay token sin canal; reintentos ante 5xx en `postFormulario` (DOGC y cualquier fuente POST) con detalle explicativo; pie «Sin telemetría…» eliminado.
 - **v2.3.14**: reintentos de la v2.3.13 retirados a petición (la ingesta vuelve al comportamiento de la v2.3.12); el resto de la v2.3.13 se conserva intacto.
 - **v2.3.15**: filtro de temática en la búsqueda (10 temáticas, substring sin acentos sobre título+organismo, keywords cortas por palabra completa; endpoint `GET /api/tematicas`); diagnóstico del 401 del bot — detección del Client Secret antes de llamar a Discord y mensajes con la vía exacta del token.
+- **v2.3.16**: buscador con rejilla fija (fin de las filas huérfanas tipo «Hasta» a todo lo ancho; Buscar+Temática arriba, resto abajo; tablet en 2 columnas, móvil apilado) y estáticos con `no-cache` (el navegador ya no pinta la interfaz vieja tras actualizar).
 
 Datos de los boletines oficiales: reutilización permitida citando la fuente (ver licencia de cada uno en el panel). Código inspirado en [opoalerta/opoalerta](https://github.com/opoalerta/opoalerta).

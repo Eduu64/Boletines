@@ -188,9 +188,42 @@ label { font-size: 0.84rem; font-weight: 600; display: block; margin-bottom: 4px
 .campo .ayuda { margin-top: 4px; }
 
 .fila { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
-.fila-filtros { align-items: flex-end; }
-.fila-filtros .campo-filtro { flex: 1 1 150px; min-width: 140px; }
-.fila-filtros .campo-filtro.ancho { flex: 2 1 220px; }
+/* Rejilla determinista del buscador (v2.3.16): antes era flex con wrap y el
+   punto de corte era aleatorio — con 7 filtros salían filas huérfanas (p. ej.
+   «Hasta» sola, estirada a todo lo ancho). Ahora dos filas fijas:
+   fila 1 = Buscar (8/12) + Temática (4/12);
+   fila 2 = Tipo, Ámbito, Boletín, Desde, Hasta (2/12 cada uno) + botón (2/12).
+   En pantallas estrechas (<700 px) todo apila a una columna. */
+.fila-filtros {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 12px;
+  align-items: end;
+}
+.fila-filtros .campo-filtro { grid-column: span 2; min-width: 0; }
+.fila-filtros .campo-filtro.ancho { grid-column: span 8; }
+.fila-filtros .campo-filtro.tematica { grid-column: span 4; }
+.fila-filtros > .boton { grid-column: span 2; justify-self: stretch; }
+@media (max-width: 699px) {
+  .fila-filtros { grid-template-columns: 1fr; gap: 10px; }
+  /* El reset necesita la MISMA especificidad que las reglas base (0,3,0 para
+     .ancho y .tematica): si no, span 8/span 4 ganan y crean columnas implícitas. */
+  .fila-filtros .campo-filtro.ancho,
+  .fila-filtros .campo-filtro.tematica,
+  .fila-filtros .campo-filtro,
+  .fila-filtros > .boton { grid-column: auto; }
+}
+/* Tablet (700-999 px): 2 columnas holgadas — Buscar y Temática a todo lo ancho,
+   el resto emparejado; así los desplegables y fechas no se truncan. */
+@media (min-width: 700px) and (max-width: 999px) {
+  .fila-filtros { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .fila-filtros .campo-filtro.ancho,
+  .fila-filtros .campo-filtro.tematica,
+  .fila-filtros .campo-filtro,
+  .fila-filtros > .boton { grid-column: auto; }
+  .fila-filtros .campo-filtro.ancho,
+  .fila-filtros .campo-filtro.tematica { grid-column: span 2; }
+}
 .campo-filtro label { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--tinta-3); margin-bottom: 3px; }
 
 .cuadricula-campos { display: grid; grid-template-columns: 1fr; gap: 0 14px; }

@@ -27,7 +27,7 @@ import { itemCoincide } from "./matching.mjs";
 import { permitirEntrada, cortafuegosActivo, cortafuegosEntradaActivo } from "./cortafuegos.mjs";
 import { fechaBonita } from "./normalizar.mjs";
 
-const VERSION = "2.3.15";
+const VERSION = "2.3.16";
 const RAIZ_PUBLICO = join(fileURLToPath(new URL(".", import.meta.url)), "..", "publico");
 const TAM_PAGINA = 20;
 const MAX_CUERPO = 256 * 1024;
@@ -140,7 +140,10 @@ function servirEstatico(res, ruta) {
   const archivo = relativa === "/" || relativa === "" ? join(RAIZ_PUBLICO, "index.html") : join(RAIZ_PUBLICO, relativa);
   if (!archivo.startsWith(RAIZ_PUBLICO) || !existsSync(archivo) || !statSync(archivo).isFile()) return false;
   const tipo = TIPOS[extname(archivo)] ?? "application/octet-stream";
-  const cacheo = extname(archivo) === ".html" ? "no-store" : "public, max-age=3600";
+  // v2.3.16: antes CSS/JS iban con max-age=3600 y, al actualizar el contenedor,
+  // el navegador seguía pintando el CSS viejo hasta una hora («no se ve bien»
+  // tras un upgrade). Son ficheros diminutos en LAN: revalidar SIEMPRE.
+  const cacheo = "no-cache";
   const clave = `${archivo}:${statSync(archivo).mtimeMs}`;
   let cuerpo = cacheEstaticos.get(archivo)?.clave === clave ? cacheEstaticos.get(archivo).cuerpo : null;
   if (!cuerpo) {

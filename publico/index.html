@@ -75,12 +75,16 @@
     <!-- ══════════ CONVOCATORIAS ══════════ -->
     <section class="seccion oculto" id="convocatorias" role="tabpanel" aria-labelledby="tab-convocatorias">
       <div class="tarjeta">
-        <div class="cabecera"><h2>🔎 Buscador de convocatorias</h2><p class="descripcion">Busca en todo lo ingestado, con filtros por tipo, ámbito, boletín y fecha</p></div>
+        <div class="cabecera"><h2>🔎 Buscador de convocatorias</h2><p class="descripcion">Busca en todo lo ingestado, con filtros por temática, tipo, ámbito, boletín y fecha</p></div>
         <div class="cuerpo">
           <form id="form-busqueda" class="fila fila-filtros">
             <div class="campo-filtro ancho">
               <label for="b-q">Buscar</label>
               <input type="search" id="b-q" placeholder="Título u organismo…" />
+            </div>
+            <div class="campo-filtro tematica">
+              <label for="b-tematica">Temática</label>
+              <select id="b-tematica"><option value="">Cualquiera</option></select>
             </div>
             <div class="campo-filtro">
               <label for="b-tipo">Tipo</label>
@@ -106,10 +110,6 @@
             <div class="campo-filtro">
               <label for="b-fuente">Boletín</label>
               <select id="b-fuente"><option value="">Cualquiera</option></select>
-            </div>
-            <div class="campo-filtro">
-              <label for="b-tematica">Temática</label>
-              <select id="b-tematica"><option value="">Cualquiera</option></select>
             </div>
             <div class="campo-filtro">
               <label for="b-desde">Desde</label>
