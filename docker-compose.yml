@@ -1,0 +1,58 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# OpoAlerta Docker v2.3.3 · despliegue con un comando:
+#   cp .env.example .env   (opcional: ajusta valores)
+#   docker compose up -d --build
+# Panel web: http://IP-DEL-SERVIDOR:3000 — la app SOLO responde a tu red local
+# (CORTAFUEGOS_ENTRADA=lan): una IP pública de internet recibe un 403.
+# ─────────────────────────────────────────────────────────────────────────────
+
+services:
+  opoalerta:
+    build: .
+    image: opoalerta-docker:2.3.3
+    container_name: opoalerta
+    restart: unless-stopped
+    ports:
+      # La app solo contesta a IPs privadas (CORTAFUEGOS_ENTRADA=lan): tu LAN
+      # ve el panel, internet recibe un 403. Para que Docker ni siquiera abra
+      # el puerto en la interfaz pública: PUERTO_PUBLICADO=<IP-LAN> en .env.
+      - "${PUERTO_PUBLICADO:-0.0.0.0}:${PUERTO:-3000}:3000"
+    environment:
+      # Base de datos (SQLite dentro del volumen, no tocar)
+      DATABASE_URL: file:/app/data/opoalerta.db
+      # Programador diario de ingestas de los boletines
+      ENABLE_SCHEDULER: ${ENABLE_SCHEDULER:-1}
+      HORARIO_INGESTA: ${HORARIO_INGESTA:-0 9 * * *,35 11 * * *}
+      ZONA_HORARIA: ${ZONA_HORARIA:-Europe/Madrid}
+      BACKFILL_DIAS: ${BACKFILL_DIAS:-7}
+      # Bot de Discord global (opcional: también configurable desde la web)
+      DISCORD_BOT_TOKEN: ${DISCORD_BOT_TOKEN:-}
+      DISCORD_CANAL_ID: ${DISCORD_CANAL_ID:-}
+      # Token de administración opcional (escrituras de la API + consola)
+      ADMIN_TOKEN: ${ADMIN_TOKEN:-}
+      # Cortafuegos de salida: la app solo puede conectar a los portales de los
+      # boletines y a Discord (discord.com/discordapp.com). «off» lo desactiva.
+      CORTAFUEGOS_SALIDA: ${CORTAFUEGOS_SALIDA:-lista}
+      # Dominios adicionales permitidos, separados por comas (p. ej. proxy corporativo)
+      SALIDA_EXTRA: ${SALIDA_EXTRA:-}
+      # Cortafuegos de entrada: el panel solo se sirve a IPs privadas (tu LAN,
+      # redes Docker y loopback); una IP pública recibe un 403 inmediato.
+      CORTAFUEGOS_ENTRADA: ${CORTAFUEGOS_ENTRADA:-lan}
+      # 1 = el panel puede mostrarse dentro de un iframe externo (vistas previa)
+      PERMITIR_EMBEBER: ${PERMITIR_EMBEBER:-0}
+      TZ: ${TZ:-Europe/Madrid}
+    volumes:
+      - ./data:/app/data
+    # Contenedor endurecido y ligero: sin privilegios y con techo de memoria
+    # (la app suele rondar 45-70 MB; el techo deja margen a las ingestas)
+    mem_limit: ${LIMITE_MEMORIA:-256m}
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/api/health"]
+      interval: 60s
+      timeout: 8s
+      retries: 3
+      start_period: 20s

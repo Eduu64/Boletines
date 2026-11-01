@@ -1,0 +1,112 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# OpoAlerta Docker v2.3.3 · MODO REFORZADO (proxy interno de salida)
+#
+#   docker compose -f docker-compose.reforzado.yml up -d --build
+#
+# 100 % Docker: dos contenedores (app + proxy) y dos redes de Docker. El
+# sistema operativo del host NO se toca: sin iptables, sin ufw, sin servicios
+# ni usuarios nuevos — solo comandos de «docker compose».
+#
+# Diferencia con docker-compose.yml: el contenedor de la app vive en una red
+# Docker SIN internet (internal: true) y su ÚNICA vía de salida es un proxy
+# Squid con lista blanca (los 16 boletines + Discord, proxy/dominios.list).
+# Dos capas: la lista blanca dentro de la app (CORTAFUEGOS_SALIDA, sigue
+# activa) y la lista blanca en la red. Aunque el código de la app se viera
+# comprometido, ninguna conexión a otro destino saldría: muere en la red.
+# Tampoco puede iniciar conexiones a tu LAN (192.168.x.x). El panel se publica
+# en todas las interfaces (PUERTO_PUBLICADO=0.0.0.0) pero la app SOLO contesta
+# a IPs privadas — tu red local, redes Docker y loopback (CORTAFUEGOS_ENTRADA);
+# una IP pública de internet recibe un 403 inmediato. Si quieres además que
+# Docker ni siquiera escuche en la interfaz pública: PUERTO_PUBLICADO=<IP-LAN>.
+# Coste: ~25 MB de RAM extra.
+#
+# Verificación: bash scripts/prueba-proxy.sh
+#
+# Notas:
+# · Si añades un dominio con SALIDA_EXTRA, añádelo también a
+#   proxy/dominios.list para que el proxy lo deje pasar.
+# · Solo se permiten túneles TLS (puerto 443): todo lo que consulta la app
+#   es https. Los tests con servidores locales (BOE falso, mock webhook)
+#   se ejecutan fuera de Docker y no necesitan el proxy.
+# ─────────────────────────────────────────────────────────────────────────────
+
+services:
+  opoalerta:
+    build: .
+    image: opoalerta-docker:2.3.3
+    container_name: opoalerta
+    restart: unless-stopped
+    ports:
+      # La entrada al panel la controlan DOS capas (ver CORTAFUEGOS_ENTRADA en
+      # environment): la app solo contesta a IPs privadas (tu LAN), y esta
+      # publicación decide en qué interfaz escucha Docker. 0.0.0.0 = todas
+      # (inmune a cambios de IP por DHCP); <IP-LAN-del-servidor> = Docker ni
+      # siquiera abre el puerto en la interfaz pública (más estricto).
+      - "${PUERTO_PUBLICADO:-0.0.0.0}:${PUERTO:-3000}:3000"
+    environment:
+      # Base de datos (SQLite dentro del volumen, no tocar)
+      DATABASE_URL: file:/app/data/opoalerta.db
+      # Programador diario de ingestas de los boletines
+      ENABLE_SCHEDULER: ${ENABLE_SCHEDULER:-1}
+      HORARIO_INGESTA: ${HORARIO_INGESTA:-0 9 * * *,35 11 * * *}
+      ZONA_HORARIA: ${ZONA_HORARIA:-Europe/Madrid}
+      BACKFILL_DIAS: ${BACKFILL_DIAS:-7}
+      # Bot de Discord global (opcional: también configurable desde la web)
+      DISCORD_BOT_TOKEN: ${DISCORD_BOT_TOKEN:-}
+      DISCORD_CANAL_ID: ${DISCORD_CANAL_ID:-}
+      # Token de administración opcional (escrituras de la API + consola)
+      ADMIN_TOKEN: ${ADMIN_TOKEN:-}
+      # 1.ª capa: lista blanca de salida dentro de la app (se mantiene)
+      CORTAFUEGOS_SALIDA: ${CORTAFUEGOS_SALIDA:-lista}
+      SALIDA_EXTRA: ${SALIDA_EXTRA:-}
+      # Cortafuegos de ENTRADA: el panel solo se sirve a IPs privadas (tu LAN,
+      # redes Docker y loopback); una IP pública recibe un 403 inmediato.
+      CORTAFUEGOS_ENTRADA: ${CORTAFUEGOS_ENTRADA:-lan}
+      # 1 = el panel puede mostrarse dentro de un iframe externo (vistas previa)
+      PERMITIR_EMBEBER: ${PERMITIR_EMBEBER:-0}
+      TZ: ${TZ:-Europe/Madrid}
+      # 2.ª capa: TODA la salida de Node atraviesa el proxy interno
+      NODE_USE_ENV_PROXY: "1"            # fetch() nativo respeta el proxy (Node 24)
+      HTTP_PROXY: http://proxy:3128
+      HTTPS_PROXY: http://proxy:3128
+      NO_PROXY: localhost,127.0.0.1,proxy
+      no_proxy: localhost,127.0.0.1,proxy
+    volumes:
+      - ./data:/app/data
+    networks: [interna]
+    # Contenedor endurecido y ligero: sin privilegios y con techo de memoria
+    mem_limit: ${LIMITE_MEMORIA:-256m}
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    depends_on:
+      - proxy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/api/health"]
+      interval: 60s
+      timeout: 8s
+      retries: 3
+      start_period: 20s
+
+  proxy:
+    build: ./proxy
+    image: opoalerta-proxy:2.3.3
+    container_name: opoalerta-proxy
+    restart: unless-stopped
+    networks: [interna, salida]
+    mem_limit: 96m
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    healthcheck:
+      test: ["CMD", "squid", "-k", "check"]
+      interval: 60s
+      timeout: 5s
+      retries: 3
+
+networks:
+  interna:
+    internal: true # sin ruta a internet ni a tu LAN
+  salida:

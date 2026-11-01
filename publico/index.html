@@ -1,0 +1,323 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>OpoAlerta · Alertas de empleo público (BOE + 15 boletines)</title>
+  <meta name="description" content="Panel local de alertas de oposiciones y personal laboral: ingesta diaria del BOE y de 15 boletines oficiales, avisos a Discord. Sin telemetría, todo local." />
+  <meta name="robots" content="noindex" />
+  <meta name="theme-color" content="#059669" />
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="/static/estilo.css" />
+</head>
+<body>
+  <header>
+    <div class="barra">
+      <a class="marca" href="/" aria-label="Inicio de OpoAlerta">
+        <img src="/static/logo.svg" alt="" width="38" height="38" />
+        <span class="marca-texto">
+          <span class="marca-nombre">OpoAlerta</span>
+          <span class="marca-sub">Empleo público · BOE + 15 boletines · avisos a Discord</span>
+        </span>
+      </a>
+      <nav class="navegacion" aria-label="Navegación principal">
+        <a href="/estado-servicio" title="Estado del servicio">📊 <span class="solo-grande">Estado del servicio</span></a>
+        <span class="insignia-modo" id="insignia-modo" title="Comprobando…"><span class="punto-verde" aria-hidden="true"></span> Boletines reales</span>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <div class="pestanas" role="tablist" aria-label="Secciones del panel">
+      <button class="pestana" role="tab" id="tab-panel" aria-controls="panel" aria-selected="true">Panel</button>
+      <button class="pestana" role="tab" id="tab-convocatorias" aria-controls="convocatorias" aria-selected="false">Convocatorias</button>
+      <button class="pestana" role="tab" id="tab-alertas" aria-controls="alertas" aria-selected="false">Alertas</button>
+      <button class="pestana" role="tab" id="tab-sistema" aria-controls="sistema" aria-selected="false">Sistema</button>
+    </div>
+
+    <!-- ══════════ PANEL ══════════ -->
+    <section class="seccion" id="panel" role="tabpanel" aria-labelledby="tab-panel">
+      <div class="rejilla-stats">
+        <div class="tarjeta"><div class="cuerpo stat"><div class="icono" aria-hidden="true">📥</div><div><div class="etiqueta">Convocatorias guardadas</div><div class="valor" id="stat-total">…</div></div></div></div>
+        <div class="tarjeta"><div class="cuerpo stat"><div class="icono" aria-hidden="true">📅</div><div><div class="etiqueta">Novedades hoy</div><div class="valor" id="stat-hoy">…</div></div></div></div>
+        <div class="tarjeta"><div class="cuerpo stat"><div class="icono" aria-hidden="true">🔔</div><div><div class="etiqueta">Alertas activas</div><div class="valor" id="stat-alertas">…</div><div class="detalle" id="stat-alertas-detalle"></div></div></div></div>
+        <div class="tarjeta"><div class="cuerpo stat"><div class="icono" aria-hidden="true">📨</div><div><div class="etiqueta">Avisos Discord</div><div class="valor" id="stat-avisos">…</div><div class="detalle">enviados correctamente</div></div></div></div>
+      </div>
+
+      <div class="tarjeta margen-arriba-grande">
+        <div class="cabecera"><h2>📰 Estado de los boletines</h2><p class="descripcion">Resultado de la última ingesta de cada fuente (16 boletines oficiales)</p></div>
+        <div class="cuerpo">
+          <div class="rejilla-fuentes" id="franja-fuentes"><p class="cargando">Cargando…</p></div>
+          <div class="leyenda" aria-hidden="true">
+            <span><span class="punto-verde"></span> con datos</span>
+            <span><span class="punto-ambar"></span> sin datos ese día</span>
+            <span><span class="punto-rojo"></span> error</span>
+            <span><span class="punto-gris"></span> sin ejecutar</span>
+          </div>
+          <p class="ayuda" id="franja-detalle"></p>
+        </div>
+      </div>
+
+      <div class="cuadricula-2 margen-arriba-grande">
+        <div class="tarjeta">
+          <div class="cabecera"><h2>🆕 Últimas convocatorias</h2><p class="descripcion">Lo último ingestado de los boletines activos</p></div>
+          <div class="cuerpo"><ul class="lista-convs" id="ultimas"><li class="vacio">Cargando…</li></ul></div>
+        </div>
+        <div class="tarjeta">
+          <div class="cabecera"><h2>🔄 Ingesta de boletines</h2><p class="descripcion" id="desc-scheduler">Comprobando programación…</p></div>
+          <div class="cuerpo">
+            <div id="ultimo-log" class="meta"></div>
+            <p class="ayuda" id="ultima-fecha"></p>
+            <div class="mt-10">
+              <button class="boton" id="boton-ingestar">🔄 Ingestar ahora</button>
+              <p class="ayuda oculto margen-arriba" id="ingesta-curso">⏳ Hay una ingesta en marcha: la franja de boletines y el resultado se actualizarán solos al terminar.</p>
+            </div>
+            <div id="resultado-ingesta"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══════════ CONVOCATORIAS ══════════ -->
+    <section class="seccion oculto" id="convocatorias" role="tabpanel" aria-labelledby="tab-convocatorias">
+      <div class="tarjeta">
+        <div class="cabecera"><h2>🔎 Buscador de convocatorias</h2><p class="descripcion">Busca en todo lo ingestado, con filtros por tipo, ámbito, boletín y fecha</p></div>
+        <div class="cuerpo">
+          <form id="form-busqueda" class="fila fila-filtros">
+            <div class="campo-filtro ancho">
+              <label for="b-q">Buscar</label>
+              <input type="search" id="b-q" placeholder="Título u organismo…" />
+            </div>
+            <div class="campo-filtro">
+              <label for="b-tipo">Tipo</label>
+              <select id="b-tipo">
+                <option value="">Cualquiera</option>
+                <option value="convocatoria">Convocatoria</option>
+                <option value="lista">Listas / Aprobados</option>
+                <option value="resolucion">Resolución</option>
+                <option value="correccion">Corrección</option>
+                <option value="otro">Otro</option>
+              </select>
+            </div>
+            <div class="campo-filtro">
+              <label for="b-ambito">Ámbito</label>
+              <select id="b-ambito">
+                <option value="">Cualquiera</option>
+                <option value="estatal">Estatal</option>
+                <option value="autonomica">Autonómico</option>
+                <option value="provincial">Provincial</option>
+                <option value="local">Local</option>
+              </select>
+            </div>
+            <div class="campo-filtro">
+              <label for="b-fuente">Boletín</label>
+              <select id="b-fuente"><option value="">Cualquiera</option></select>
+            </div>
+            <div class="campo-filtro">
+              <label for="b-desde">Desde</label>
+              <input type="date" id="b-desde" />
+            </div>
+            <div class="campo-filtro">
+              <label for="b-hasta">Hasta</label>
+              <input type="date" id="b-hasta" />
+            </div>
+            <button class="boton" type="submit">🔍 Buscar</button>
+          </form>
+          <p class="ayuda" id="c-resumen"></p>
+          <ul class="lista-convs lista-larga" id="lista-convocatorias"><li class="vacio">Introduce una búsqueda o pulsa Buscar.</li></ul>
+          <div class="fila">
+            <button class="boton secundario mini" id="pag-anterior">← Anterior</button>
+            <span class="ayuda" id="pag-info"></span>
+            <button class="boton secundario mini" id="pag-siguiente">Siguiente →</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══════════ ALERTAS ══════════ -->
+    <section class="seccion oculto" id="alertas" role="tabpanel" aria-labelledby="tab-alertas">
+      <div class="cuadricula-2">
+        <div class="tarjeta">
+          <div class="cabecera"><h2>🔔 Tus alertas</h2><p class="descripcion">Cada alerta cruza los anuncios nuevos de todos los boletines y avisa a Discord</p></div>
+          <div class="cuerpo" id="lista-alertas"><p class="cargando">Cargando…</p></div>
+        </div>
+        <div class="tarjeta">
+          <div class="cabecera"><h2>➕ Alerta nueva</h2><p class="descripcion">El texto del anuncio y las palabras clave se comparan sin acentos ni puntuación</p></div>
+          <div class="cuerpo">
+            <form id="form-alerta">
+              <div class="campo"><label for="a-nombre">Nombre</label><input id="a-nombre" required placeholder="p. ej. Ingenieros de caminos" /></div>
+              <div class="campo">
+                <label for="a-keywords">Palabras clave (separadas por comas)</label>
+                <input id="a-keywords" placeholder="personal laboral, ingeniero de caminos" />
+                <p class="ayuda">Modo «cualquiera»: basta con que aparezca una. Vacío = todo.</p>
+              </div>
+              <div class="cuadricula-campos">
+                <div class="campo">
+                  <label for="a-modo">Modo de las palabras clave</label>
+                  <select id="a-modo"><option value="cualquiera">Cualquiera (basta una)</option><option value="todas">Todas (todas a la vez)</option></select>
+                </div>
+                <div class="campo">
+                  <label for="a-ambito">Ámbito</label>
+                  <select id="a-ambito"><option value="todos">Todos</option><option value="estatal">Estatal</option><option value="autonomica">Autonómico</option><option value="provincial">Provincial</option><option value="local">Local</option></select>
+                </div>
+              </div>
+              <div class="campo"><label for="a-organismo">Organismo (opcional)</label><input id="a-organismo" placeholder="p. ej. Ayuntamiento de Madrid" /></div>
+              <div class="interruptor"><label for="a-solo">Solo convocatorias (descarta listas y correcciones)</label><input type="checkbox" id="a-solo" checked /></div>
+              <div class="campo"><label for="a-webhook">Webhook de Discord (opcional, para esta alerta)</label><input id="a-webhook" placeholder="https://discord.com/api/webhooks/…" /><p class="ayuda">Si lo dejas vacío se usa el bot global de Sistema.</p></div>
+              <div class="campo"><label for="a-canal">ID de canal de Discord (opcional)</label><input id="a-canal" placeholder="1134567890123456789" /></div>
+              <button class="boton" type="submit">Crear alerta</button>
+            </form>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══════════ SISTEMA ══════════ -->
+    <section class="seccion oculto" id="sistema" role="tabpanel" aria-labelledby="tab-sistema">
+      <div class="cuadricula-2">
+        <div class="tarjeta">
+          <div class="cabecera"><h2>⚙️ Ajustes generales</h2><p class="descripcion">Configuración de la ingesta y de Discord</p></div>
+          <div class="cuerpo">
+            <div class="campo">
+              <label for="aj-fuente">Fuente de datos</label>
+              <select id="aj-fuente"><option value="real">Boletines reales (BOE + autonómicos)</option><option value="demo">Modo demo (datos de ejemplo)</option></select>
+              <p class="ayuda oculto" id="aj-fuente-aviso">Estás en modo demo: las ingestas usan datos de ejemplo realistas para verificar alertas y notificaciones sin depender de boe.es.</p>
+            </div>
+            <div class="campo"><label for="aj-token">Token del bot de Discord (global)</label><input id="aj-token" type="password" placeholder="MTIzNDU2Nzg5MDEy…" /><p class="ayuda" id="aj-token-ayuda">Se guarda en la base de datos local.</p></div>
+            <div class="campo"><label for="aj-canal">Canal por defecto del bot</label><input id="aj-canal" placeholder="ID del canal, p. ej. 1134567890123456789" /></div>
+            <div class="interruptor"><label for="aj-enr">Enriquecer ámbito geográfico<br /><span class="ayuda">Consulta cada documento del BOE: estatal / autonómico / provincial / local</span></label><input type="checkbox" id="aj-enr" checked /></div>
+            <div class="interruptor"><label for="aj-sinnov">Avisar cuando no haya novedades<br /><span class="ayuda">Envía un «sin coincidencias hoy» a las alertas con destino</span></label><input type="checkbox" id="aj-sinnov" /></div>
+            <div class="campo"><label for="aj-purga">Purgar anuncios con más de X días (0 = nunca)</label><input id="aj-purga" type="number" min="0" max="3650" value="180" /><p class="ayuda">Recomendado: 180 días para mantener la base ligera.</p></div>
+            <button class="boton" id="boton-guardar-ajustes">💾 Guardar ajustes</button>
+          </div>
+        </div>
+
+        <div>
+          <div class="tarjeta">
+            <div class="cabecera"><h2>▶️ Ingesta manual</h2><p class="descripcion">Ejecuta la ingesta de los boletines activos cuando quieras</p></div>
+            <div class="cuerpo">
+              <div class="fila">
+                <div class="campo-filtro ancho">
+                  <label for="aj-fecha">Fecha de los boletines (vacío = hoy)</label>
+                  <input type="date" id="aj-fecha" />
+                </div>
+                <button class="boton" id="boton-ingestar-fecha">Ejecutar</button>
+              </div>
+              <div id="resultado-ingesta-2"></div>
+            </div>
+          </div>
+
+          <div class="tarjeta margen-arriba">
+            <div class="cabecera"><h2>🕐 Programación automática</h2></div>
+            <div class="cuerpo">
+              <p class="texto-normal" id="sched-estado"></p>
+              <p class="ayuda">Ingestas diarias a las 09:00 con reintento a las 11:35 (hora de España). Si el servidor está apagado a esa hora no se pierde nada: al arrancar, la app comprueba qué días faltan (últimos 7 por defecto, <code>BACKFILL_DIAS</code>) y los ingesta de más antiguo a más reciente.</p>
+              <p class="ayuda" id="sched-ultima"></p>
+            </div>
+          </div>
+
+          <div class="tarjeta margen-arriba">
+            <div class="cabecera"><h2>📰 Boletines activos</h2><p class="descripcion">Cada ingesta consulta estos boletines oficiales; un fallo no impide al resto</p></div>
+            <div class="cuerpo">
+              <div class="lista-check" id="lista-fuentes"><p class="cargando">Cargando…</p></div>
+              <div class="fila mt-10">
+                <button class="boton secundario mini" id="boton-verificar-fuentes">🔌 Comprobar conexión (firewall)</button>
+                <span class="ayuda" id="verificar-info">Prueba una conexión ligera con cada portal oficial.</span>
+              </div>
+              <div id="resultado-verificar"></div>
+            </div>
+          </div>
+
+          <div class="tarjeta margen-arriba">
+            <div class="cabecera"><h2>🖥️ Recursos</h2></div>
+            <div class="cuerpo">
+              <p class="meta"><span class="etiqueta neutra" id="res-ram">RAM: …</span><span class="etiqueta neutra" id="res-heap">Heap: …</span><span class="etiqueta neutra">SQLite local</span></p>
+              <p class="ayuda">Un solo proceso Node con la SQLite integrada (node:sqlite): sin Postgres, sin Redis, sin React, sin node_modules. Consumo típico: 45-70 MB de RAM.</p>
+            </div>
+          </div>
+
+          <details class="detalle-guia margen-arriba">
+            <summary>❓ Cómo conectar Discord (guía)</summary>
+            <div class="cuerpo">
+              <p><b>Opción A · Bot global (recomendado)</b></p>
+              <ol class="pasos">
+                <li>En discord.com/developers/applications → New Application → pestaña <b>Bot</b> → Reset Token → copia el token.</li>
+                <li>Pestaña <b>OAuth2 → URL Generator</b>: marca scope <code>bot</code> y permiso <code>Send Messages</code>; abre la URL generada para invitarlo a tu servidor.</li>
+                <li>Activa el modo desarrollador (Ajustes → Avanzado), clic derecho en el canal → <b>Copiar ID de canal</b>.</li>
+                <li>Pega el token y el ID de canal en Ajustes generales y guarda.</li>
+              </ol>
+              <p><b>Opción B · Webhook por alerta</b></p>
+              <ol class="pasos">
+                <li>En Discord: ajustes del canal → <b>Integraciones</b> → <b>Webhooks</b> → Nuevo webhook.</li>
+                <li>Copia la URL (empieza por <code>https://discord.com/api/webhooks/…</code>).</li>
+                <li>Pégala en la alerta (campo «Webhook de Discord») y pulsa «Probar».</li>
+              </ol>
+            </div>
+          </details>
+        </div>
+      </div>
+
+      <div class="tarjeta margen-arriba-grande">
+        <div class="cabecera fila">
+          <h2>🖥️ Consola del servidor</h2>
+          <div class="consola-toolbar">
+            <select id="consola-nivel">
+              <option value="todos">Todos</option><option value="info">Info</option><option value="aviso">Avisos</option><option value="error">Errores</option>
+            </select>
+            <label class="consola-auto"><input type="checkbox" id="consola-auto" checked /> auto 5 s</label>
+            <button class="boton secundario mini" id="consola-refrescar">Refrescar</button>
+            <button class="boton secundario mini peligro" id="consola-limpiar">Limpiar</button>
+          </div>
+        </div>
+        <div class="cuerpo">
+          <p class="ayuda">Visor de solo lectura de lo que escribe el servidor (equivale a «docker logs»). No permite ejecutar comandos.</p>
+          <div class="consola" id="consola-caja"><span class="texto-suave">Sin mensajes todavía.</span></div>
+        </div>
+      </div>
+
+      <div class="tarjeta margen-arriba-grande">
+        <div class="cabecera"><h2>📋 Registro de ingestas</h2><p class="descripcion">Últimos 15 intentos (programados, manuales y de arranque)</p></div>
+        <div class="cuerpo tabla-envoltorio">
+          <table id="tabla-logs">
+            <thead><tr><th>Estado</th><th>Fecha</th><th>Origen</th><th>Boletín</th><th class="num">Ítems</th><th class="num">Nuevos</th><th class="num">Avisos</th><th class="num">Duración</th><th>Mensaje</th></tr></thead>
+            <tbody><tr><td colspan="9" class="vacio">Cargando…</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="pie"><b>OpoAlerta v2.2.0</b> · todo local, sin telemetría · datos de BOE y boletines oficiales (reutilización citando fuente)</footer>
+
+  <!-- Diálogo de edición de alerta -->
+  <dialog id="dialogo-alerta">
+    <form method="dialog" id="form-editar" class="cuerpo">
+      <h2>✏️ Editar alerta</h2>
+      <input type="hidden" id="e-id" />
+      <div class="campo"><label for="e-nombre">Nombre</label><input id="e-nombre" required /></div>
+      <div class="campo"><label for="e-keywords">Palabras clave</label><textarea id="e-keywords" rows="2"></textarea></div>
+      <div class="cuadricula-campos">
+        <div class="campo">
+          <label for="e-modo">Modo</label>
+          <select id="e-modo"><option value="cualquiera">Cualquiera</option><option value="todas">Todas</option></select>
+        </div>
+        <div class="campo">
+          <label for="e-ambito">Ámbito</label>
+          <select id="e-ambito"><option value="todos">Todos</option><option value="estatal">Estatal</option><option value="autonomica">Autonómico</option><option value="provincial">Provincial</option><option value="local">Local</option></select>
+        </div>
+      </div>
+      <div class="campo"><label for="e-organismo">Organismo</label><input id="e-organismo" /></div>
+      <div class="interruptor"><label for="e-solo">Solo convocatorias</label><input type="checkbox" id="e-solo" /></div>
+      <div class="campo"><label for="e-webhook">Webhook de Discord</label><input id="e-webhook" /></div>
+      <div class="campo"><label for="e-canal">ID de canal</label><input id="e-canal" /></div>
+      <div class="pie-formulario">
+        <button class="boton secundario" value="cancelar" formnovalidate>Cancelar</button>
+        <button class="boton" id="e-guardar">Guardar</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div id="avisos" aria-live="polite"></div>
+  <script src="/static/app.js"></script>
+</body>
+</html>

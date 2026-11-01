@@ -1,0 +1,25 @@
+# Lista blanca del proxy interno — espejo exacto de servidor/cortafuegos.mjs:
+# los portales de los 16 boletines + Discord. Coincidencia exacta de host
+# (sin subdominios). Un host por línea. Si añades un dominio con SALIDA_EXTRA,
+# añádelo también aquí para que el proxy lo deje pasar.
+www.boe.es
+www.bocm.es
+www.juntadeandalucia.es
+dogv.gva.es
+portaldogc.gencat.cat
+dogc.gencat.cat
+bocyl.jcyl.es
+doe.juntaex.es
+www.caib.es
+www.boa.aragon.es
+www.gobiernodecanarias.org
+www.euskadi.eus
+www.xunta.gal
+docm.jccm.es
+miprincipado.asturias.es
+sede.asturias.es
+api.diba.cat
+cido.diba.cat
+eu-careers.europa.eu
+discord.com
+discordapp.com

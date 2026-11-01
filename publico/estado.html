@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Estado del servicio · OpoAlerta</title>
+  <meta name="description" content="Estado de la ingesta de boletines: convocatorias guardadas, última ejecución y salud de cada fuente." />
+  <meta name="robots" content="noindex" />
+  <meta name="theme-color" content="#059669" />
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="/static/estilo.css" />
+</head>
+<body>
+  <header>
+    <div class="barra">
+      <a class="marca" href="/" aria-label="Inicio de OpoAlerta">
+        <img src="/static/logo.svg" alt="" width="38" height="38" />
+        <span class="marca-texto">
+          <span class="marca-nombre">OpoAlerta</span>
+          <span class="marca-sub">Empleo público · BOE + 15 boletines · avisos a Discord</span>
+        </span>
+      </a>
+      <nav class="navegacion" aria-label="Navegación principal">
+        <a href="/">Inicio</a>
+        <a href="/estado-servicio" aria-current="page">Estado del servicio</a>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <nav class="migas" aria-label="Migas de pan"><a href="/">Inicio</a> <span aria-hidden="true">/</span> Estado del servicio</nav>
+
+    <div class="cabecera-pagina">
+      <div class="titulos">
+        <h1>📊 Estado del servicio</h1>
+        <p class="intro">
+          Resumen de los anuncios que cada boletín (BOE y autonómicos) ha guardado y la salud de su última
+          ingesta. La ingesta corre cada día a las 09:00 y 11:35 (hora de España); si el servidor estaba
+          apagado, las ingestas pendientes se recuperan automáticamente al arrancar.
+        </p>
+      </div>
+    </div>
+
+    <div class="resumen-grid">
+      <div class="tarjeta"><div class="cuerpo stat"><div class="icono" aria-hidden="true">🗄️</div><div><div class="etiqueta">Convocatorias guardadas</div><div class="valor" id="e-total">…</div></div></div></div>
+      <div class="tarjeta"><div class="cuerpo stat"><div class="icono" aria-hidden="true">📅</div><div><div class="etiqueta">Último boletín con datos</div><div class="valor" id="e-fecha">…</div></div></div></div>
+      <div class="tarjeta"><div class="cuerpo stat"><div class="icono" aria-hidden="true">⚡</div><div><div class="etiqueta">Ingestas registradas</div><div class="valor" id="e-ingestas">…</div></div></div></div>
+    </div>
+
+    <div class="tarjeta margen-arriba-grande">
+      <div class="cabecera"><h2>🩺 Salud por boletín</h2><p class="descripcion">Estado de la ingesta más reciente de cada fuente (la del boletín más nuevo con registro)</p></div>
+      <div class="cuerpo">
+        <div class="rejilla-fuentes rejilla-fuentes-amplia" id="salud-fuentes"><p class="cargando">Cargando…</p></div>
+        <div class="leyenda" aria-hidden="true">
+          <span><span class="punto-verde"></span> con datos</span>
+          <span><span class="punto-ambar"></span> sin datos ese día</span>
+          <span><span class="punto-rojo"></span> error</span>
+          <span><span class="punto-gris"></span> sin ejecutar</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="tarjeta margen-arriba-grande">
+      <div class="cabecera"><h2>📋 Detalle por boletín</h2><p class="descripcion">Anuncios acumulados y última ejecución de cada fuente</p></div>
+      <div class="cuerpo tabla-envoltorio">
+        <table id="tabla-fuentes">
+          <thead>
+            <tr><th>Fuente</th><th class="num">Convocatorias</th><th class="num">Ingestas</th><th>Última ejecución</th><th>Estado</th></tr>
+          </thead>
+          <tbody><tr><td colspan="5" class="vacio">Cargando…</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+    <aside class="nota">
+      <p><b>¿Cómo funciona la ingesta multi-fuente?</b></p>
+      <p>
+        Cada día la aplicación consulta secuencialmente los boletines activos: el <b>BOE</b> prueba cuatro
+        endpoints oficiales en orden (API de datos abiertos → XML clásico → HTML del sumario → página del día) y
+        los boletines autonómicos usan su sumario, API o feed oficial. Un boletín caído no impide al resto: cada
+        uno se registra con su propio recuento y estado, y los anuncios se guardan una sola vez gracias a la
+        deduplicación por identificador. Los boletines que no publican cierto día (fines de semana y festivos en
+        casi todos) aparecen como «sin datos», que no es un error. Si algún portal no responde desde tu servidor,
+        pulsa «Comprobar conexión (firewall)» en el panel, sección Sistema.
+      </p>
+    </aside>
+  </main>
+
+  <footer class="pie"><b>OpoAlerta v2.2.0</b> · todo local · sin telemetría</footer>
+  <script src="/static/estado.js"></script>
+</body>
+</html>
