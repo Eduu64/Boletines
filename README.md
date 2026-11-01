@@ -1,4 +1,4 @@
-# OpoAlerta Docker v2.3.4
+# OpoAlerta Docker v2.3.6
 
 Alertas personales de **ofertas de empleo público** (oposiciones, personal laboral, bolsas): ingesta diaria del **BOE y de 15 boletines oficiales más**, panel web local y avisos automáticos a **Discord**.
 
@@ -19,6 +19,16 @@ node servidor/indice.mjs    # panel en http://localhost:3000
 ```
 
 ---
+
+## Novedades v2.3.6
+
+- **La prueba del panel es una escalera de diagnóstico A→D** que señala el punto exacto donde se rompe la cadena (app viva dentro del contenedor → puerto publicado por Docker → loopback del host → IP de la LAN, que es lo que abre tu navegador) y, para cada paso que falla, imprime la causa probable y el comando de arreglo concreto (recrear el stack, corregir `PUERTO_PUBLICADO` del `.env`, cortafuegos del host…).
+- **Sin falsos negativos por el proxy del servidor**: `curl`/`wget` de la prueba ignoran ahora el `http_proxy` del entorno (`--noproxy '*'`) — antes, un servidor con proxy de salida configurado en el shell daba «panel no accesible» aunque el panel estuviera perfecto.
+- **Detección de bucle de reinicios**: la app puede estar viva a medias (las pruebas de red usan `exec` y pasarían) mientras el panel está muerto; las comprobaciones previas muestran ahora estado, reinicios, última salida y OOM del contenedor, y avisan con el log antes de empezar.
+
+## Novedades v2.3.5
+
+- **`prueba-proxy.sh` ahora dice la causa, no solo «falla»**: antes escondía toda la salida de error y un contenedor parado contaba como «5 fallan». Ahora tiene comprobaciones previas (¿Docker accesible? ¿ejecutando desde la carpeta del proyecto? ¿contenedores en marcha? — con el `ps` y el log de la app impresos si no), imprime el **detalle real** de cada prueba que falla, comprueba la salud del Squid, usa `wget` si el servidor no tiene `curl` y lee el puerto del `.env`.
 
 ## Novedades v2.3.4
 
@@ -125,11 +135,11 @@ docker run --rm -v opoalerta-data:/datos -v "$PWD":/respaldo alpine \
 
 # Restaurar una copia (con el stack parado):
 docker run --rm -v opoalerta-data:/datos -v "$PWD":/respaldo alpine sh -c \
-  "cd /datos && tar xzf /respaldo/opoalerta-datos-AAAA-MM-DD.tgz && chown -R $(docker run --rm opoalerta-docker:2.3.4 id -u):$(docker run --rm opoalerta-docker:2.3.4 id -g) /datos"
+  "cd /datos && tar xzf /respaldo/opoalerta-datos-AAAA-MM-DD.tgz && chown -R $(docker run --rm opoalerta-docker:2.3.6 id -u):$(docker run --rm opoalerta-docker:2.3.6 id -g) /datos"
 
 # ¿Venías de un despliegue anterior con ./data y quieres conservarla? (una vez)
 docker run --rm -v opoalerta-data:/datos -v "$PWD/data":/origen alpine sh -c \
-  "cp -r /origen/. /datos/ && chown -R $(docker run --rm opoalerta-docker:2.3.4 id -u):$(docker run --rm opoalerta-docker:2.3.4 id -g) /datos"
+  "cp -r /origen/. /datos/ && chown -R $(docker run --rm opoalerta-docker:2.3.6 id -u):$(docker run --rm opoalerta-docker:2.3.6 id -g) /datos"
 ```
 
 El volumen es el mismo en el modo normal y en el reforzado, así que puedes alternar entre ellos sin perder nada. ¿Prefieres volver a la carpeta visible `./data`? Cambia el `volumes:` del compose a `- ./data:/app/data` — pero entonces asegúrate de que `./data` pertenezca al uid del usuario del contenedor (`docker exec opoalerta id -u`), o la app no podrá escribir.
@@ -165,7 +175,7 @@ node scripts/prueba-completa.mjs            # batería completa (recomendado; li
 node scripts/prueba-fixtures.mjs            # 16 parsers con fixtures reales del proyecto original
 node scripts/test-matching-e2e.js           # matching offline (personal laboral incluido)
 node scripts/prueba-cortafuegos.mjs         # cortafuegos de salida: lista blanca e interruptores
-bash scripts/prueba-proxy.sh                # modo reforzado con proxy interno (requiere Docker y el stack en marcha)
+node scripts/prueba-proxy.sh                # modo reforzado con proxy interno (requiere Docker y el stack en marcha; diagnostica si no lo está)
 node scripts/prueba-fallback.mjs            # cuádruple respaldo del BOE (con scripts/boe-falso.mjs)
 node scripts/prueba-e2e.mjs                 # pipeline completo: demo → matching → Discord (mock)
 node scripts/prueba-fuentes.mjs 20261031    # ingesta real de los 16 boletines (fecha AAAAMMDD)
@@ -182,5 +192,7 @@ node scripts/prueba-fuentes.mjs 20261031    # ingesta real de los 16 boletines (
 - **v2.3.2**: el panel se publica por defecto solo en `127.0.0.1` (nunca desde internet); `PUERTO_PUBLICADO` abre el acceso a tu red local y solo a ella.
 - **v2.3.3**: **cortafuegos de entrada** — la app solo sirve el panel a IPs privadas (tu LAN); una IP pública de internet recibe un 403 inmediato (`CORTAFUEGOS_ENTRADA=lan`). La publicación vuelve a `0.0.0.0` para que tu LAN entre sin tocar nada, con el filtro en la app como portero.
 - **v2.3.4**: la base de datos pasa de `./data` (bind mount con problemas de permisos: Docker creaba la carpeta como root y la app no podía escribir) a un **volumen con nombre** `opoalerta-data` (permisos correctos desde la imagen, estable entre modos y renombres de carpeta; `down -v` lo borra — ver «Tus datos»).
+- **v2.3.5**: `scripts/prueba-proxy.sh` con diagnóstico completo (comprobaciones previas del stack, detalle real de cada fallo, salud del proxy, fallback a wget, puerto leído del `.env`).
+- **v2.3.6**: prueba del panel como **escalera de diagnóstico A→D** (app → publicación de Docker → loopback → LAN, con causa y arreglo por paso), `curl`/`wget` ajenos al proxy del entorno (fin de los falsos «panel no accesible») y detección de bucles de reinicio de la app.
 
 Datos de los boletines oficiales: reutilización permitida citando la fuente (ver licencia de cada uno en el panel). Código inspirado en [opoalerta/opoalerta](https://github.com/opoalerta/opoalerta).

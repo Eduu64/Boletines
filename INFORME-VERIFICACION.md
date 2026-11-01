@@ -120,6 +120,8 @@ Verificación funcional del proxy de salida (Squid 6.13) con la lista blanca del
 
 RAM medida del proxy en marcha: ~23 MB. La config de `proxy/squid.conf` valida con `squid -k parse` (rutas estándar de Alpine). En el servidor real, `bash scripts/prueba-proxy.sh` verifica el despliegue reforzado de extremo a extremo (BOE y Discord por proxy, example.com bloqueado, sin salida directa sin proxy, panel visible por el puerto publicado).
 
+**v2.3.6 — la prueba del panel es una escalera de diagnóstico A→D**: A (la app responde dentro del contenedor, como su healthcheck), B (`docker compose port`: qué interfaz publica Docker), C (loopback del host), D (la IP de la LAN del servidor, lo que abre el navegador). Cada paso fallido imprime causa probable y comando de arreglo (recrear el stack, corregir `PUERTO_PUBLICADO`, cortafuegos del host, volumen de BD). Además: `curl`/`wget` de la prueba ignoran el `http_proxy` del entorno (`--noproxy '*'` — un servidor con proxy de salida en el shell daba falsos «panel no accesible»), y las comprobaciones previas detectan bucles de reinicio de la app (estado, `RestartCount`, exit code, OOM + log): las pruebas de red usan `exec` con procesos Node nuevos y pasarían aunque el panel estuviera muerto.
+
 Nota sobre el despliegue: la solución entregada ejecuta ese mismo Squid dentro de un contenedor Alpine (`proxy/Dockerfile`, alpine:3.20 + paquete squid). Todo el modo reforzado son dos contenedores y dos redes de Docker: en el servidor no se instala ni se configura nada del sistema operativo (sin iptables, sin ufw, sin servicios del host); solo comandos de `docker compose`.
 
 ## Cortafuegos de entrada: el panel solo se sirve a la red local (v2.3.3)

@@ -1,5 +1,5 @@
 # ─────────────────────────────────────────────────────────────────────────────
-# OpoAlerta Docker v2.3.4 · MODO REFORZADO (proxy interno de salida)
+# OpoAlerta Docker v2.3.6 · MODO REFORZADO (proxy interno de salida)
 #
 #   docker compose -f docker-compose.reforzado.yml up -d --build
 #
@@ -33,7 +33,7 @@
 services:
   opoalerta:
     build: .
-    image: opoalerta-docker:2.3.4
+    image: opoalerta-docker:2.3.6
     container_name: opoalerta
     restart: unless-stopped
     ports:
@@ -100,7 +100,7 @@ services:
 
   proxy:
     build: ./proxy
-    image: opoalerta-proxy:2.3.4
+    image: opoalerta-proxy:2.3.6
     container_name: opoalerta-proxy
     restart: unless-stopped
     networks: [interna, salida]
