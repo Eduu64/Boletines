@@ -1,0 +1,20 @@
+# dependencias (no debería existir, la app no usa npm)
+node_modules/
+
+# datos locales de la app
+/data/
+/db/
+*.db
+*.db-wal
+*.db-shm
+
+# entorno
+.env
+.env.*
+!.env.example
+
+# sistema y editor
+.DS_Store
+*.log
+dev.log
+server.log

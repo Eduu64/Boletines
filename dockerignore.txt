@@ -1,0 +1,16 @@
+# Lo que no entra en la imagen (solo se copian servidor/, publico/ y package.json)
+node_modules
+.next
+.git
+.gitignore
+db
+data
+download
+scripts
+public
+*.md
+*.zip
+*.log
+.env
+.env.*
+!.env.example
