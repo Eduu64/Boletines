@@ -26,7 +26,7 @@ import { itemCoincide } from "./matching.mjs";
 import { permitirEntrada, cortafuegosActivo, cortafuegosEntradaActivo } from "./cortafuegos.mjs";
 import { fechaBonita } from "./normalizar.mjs";
 
-const VERSION = "2.3.10";
+const VERSION = "2.3.11";
 const RAIZ_PUBLICO = join(fileURLToPath(new URL(".", import.meta.url)), "..", "publico");
 const TAM_PAGINA = 20;
 const MAX_CUERPO = 256 * 1024;
@@ -154,11 +154,45 @@ function servirEstatico(res, ruta) {
 
 // ─── Manejadores de la API ───────────────────────────────────────────────────
 
+// El esquema está garantizado al arrancar (indice.mjs llama asegurarEsquema).
+// Antes esta comprobación se re-ejecutaba en CADA petición de la API: ~27
+// sentencias DDL sincrónicas por sondeo, trabajo desperdiciado que se notaba
+// en equipos modestos. Ahora, una única vez por proceso.
+let esquemaAsegurado = false;
+function asegurarEsquemaUnaVez() {
+  if (esquemaAsegurado) return;
+  asegurarEsquema();
+  esquemaAsegurado = true;
+}
+
 async function apiHealth(res) {
   json(res, 200, { ok: true, servicio: "opoalerta-docker", version: VERSION, ts: new Date().toISOString() });
 }
 
+// Caché de /api/estado (v2.3.11): el panel la sondea cada 45 s (y cada 4 s
+// durante una ingesta) y la página de estado cada 45 s: reconstruir el JSON
+// entero en cada sondeo repetía las mismas consultas de SQLite milisegundos
+// después. Con 3 s de TTL, sondeos seguidos comparten respuesta. Cualquier
+// escritura (ingesta, ajustes, alertas) la invalida — ver gestionar —, así
+// que tras una acción siempre se recalcula. La RAM mostrada puede ir con ≤3 s
+// de retraso.
+const CACHE_ESTADO_MS = 3000;
+const cacheEstado = { cuerpo: null, expira: 0 };
+function invalidarCacheEstado() {
+  cacheEstado.expira = 0;
+}
+
 async function apiEstado(res) {
+  const ahora = Date.now();
+  if (cacheEstado.cuerpo && ahora < cacheEstado.expira) {
+    res.writeHead(200, {
+      "Content-Type": "application/json; charset=utf-8",
+      "Cache-Control": "no-store",
+      ...cabecerasSeguridad(),
+    });
+    res.end(cacheEstado.cuerpo);
+    return;
+  }
   const hoy = fechaHoyMadrid();
   const totalConvocatorias = obtenerFila(`SELECT COUNT(*) AS n FROM Convocatoria`).n;
   const hoyN = obtenerFila(`SELECT COUNT(*) AS n FROM Convocatoria WHERE fechaBOE = ?`, hoy).n;
@@ -202,7 +236,7 @@ async function apiEstado(res) {
     };
   });
 
-  json(res, 200, {
+  const datos = {
     stats: { totalConvocatorias, hoy: hoyN, alertasActivas, alertasTotal, notificacionesOk, hoyFecha: hoy },
     ultimaFechaBOE: ultimaConvocatoria?.fechaBOE ?? null,
     ingestaEnCurso: ingestaEnCurso(),
@@ -219,7 +253,16 @@ async function apiEstado(res) {
     ram: { rssMB: Math.round((mem.rss / 1048576) * 10) / 10, heapMB: Math.round((mem.heapUsed / 1048576) * 10) / 10 },
     cortafuegos: { salida: cortafuegosActivo() ? "lista" : "off", entrada: cortafuegosEntradaActivo() ? "lan" : "off" },
     version: VERSION,
+  };
+  const cuerpo = JSON.stringify(datos);
+  cacheEstado.cuerpo = cuerpo;
+  cacheEstado.expira = Date.now() + CACHE_ESTADO_MS;
+  res.writeHead(200, {
+    "Content-Type": "application/json; charset=utf-8",
+    "Cache-Control": "no-store",
+    ...cabecerasSeguridad(),
   });
+  res.end(cuerpo);
 }
 
 function normalizarFuentesActivas(valor) {
@@ -576,9 +619,12 @@ async function gestionar(req, res) {
         json(res, 429, { error: "Demasiadas peticiones, espera un minuto" });
         return;
       }
-      // El esquema está garantizado antes de tocar la BD (ver indice.mjs);
-      // comprobación barata por si algo llegó antes:
-      asegurarEsquema();
+      // Cualquier escritura invalida la caché de /api/estado: tras «Ingestar
+      // ahora» o guardar ajustes, el siguiente sondeo recalcula de verdad.
+      if (escritura) invalidarCacheEstado();
+      // El esquema está garantizado al arrancar (indice.mjs); la comprobación
+      // aquí cuesta una sola vez por proceso:
+      asegurarEsquemaUnaVez();
 
       if (ruta === "/api/health") return apiHealth(res);
       if (ruta === "/api/estado") return apiEstado(res);
@@ -618,6 +664,13 @@ export function arrancarServidor() {
   // panel no fuera accesible desde fuera. La dirección correcta es HOST.
   const maquina = process.env.HOST || "0.0.0.0";
   const servidor = createServer((req, res) => {
+    // Registro de peticiones lentas (v2.3.11): si algo vuelve a notarse lento,
+    // el log del contenedor dice QUÉ petición y CUÁNTO tardó de verdad.
+    const t0 = Date.now();
+    res.on("finish", () => {
+      const ms = Date.now() - t0;
+      if (ms > 800) console.log(`[opoalerta] lento: ${req.method} ${req.url} — ${ms} ms`);
+    });
     void gestionar(req, res);
   });
   servidor.listen(puerto, maquina, () => {

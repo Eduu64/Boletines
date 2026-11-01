@@ -87,6 +87,11 @@ const DDL = [
   )`,
   `CREATE INDEX IF NOT EXISTS "IngestaLog_fechaBOE_idx" ON "IngestaLog"("fechaBOE")`,
   `CREATE INDEX IF NOT EXISTS "IngestaLog_createdAt_idx" ON "IngestaLog"("createdAt")`,
+  // v2.3.11: el «estado por fuente» (ROW_NUMBER PARTITION BY fuente) y el
+  // resumen GROUP BY fuente dejan de recorrer y ordenar la tabla entera en
+  // cada sondeo del panel (DDL idempotente: se crea también sobre bases ya
+  // existentes al arrancar).
+  `CREATE INDEX IF NOT EXISTS "IngestaLog_fuente_fecha_idx" ON "IngestaLog"("fuente", "fechaBOE" DESC, "createdAt" DESC)`,
   `CREATE TABLE IF NOT EXISTS "Ajustes" (
     "id" INTEGER NOT NULL PRIMARY KEY DEFAULT 1,
     "fuente" TEXT NOT NULL DEFAULT 'real',

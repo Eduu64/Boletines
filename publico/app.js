@@ -197,9 +197,17 @@ function pintarLogs() {
     .join("");
 }
 
+// Último JSON pintado (sin la RAM, que siempre fluctúa): si el estado no ha
+// cambiado desde el sondeo anterior, no se repinta nada (v2.3.11).
+let estadoSerializado = null;
+
 async function recargarEstado() {
   try {
-    estado = await api("/api/estado");
+    const datos = await api("/api/estado");
+    const texto = JSON.stringify({ ...datos, ram: null });
+    if (texto === estadoSerializado) return;
+    estadoSerializado = texto;
+    estado = datos;
     pintarEstado();
   } catch (e) {
     if (e.estado === 401) {
@@ -611,12 +619,15 @@ $("consola-limpiar").addEventListener("click", async () => {
     aviso("No se pudo limpiar la consola", e.message, true);
   }
 });
-setInterval(() => { if ($("consola-auto").checked && !$("sistema").classList.contains("oculto")) cargarConsola(); }, 5000);
+setInterval(() => { if (!document.hidden && $("consola-auto").checked && !$("sistema").classList.contains("oculto")) cargarConsola(); }, 5000);
 
 // ─── Arranque ────────────────────────────────────────────────────────────────
 
 recargarEstado().then(cargarUltimas);
-setInterval(recargarEstado, 45000);
+// Sondeo en pausa mientras la pestaña del navegador no esté visible; refresco
+// inmediato al volver a ella (v2.3.11).
+setInterval(() => { if (!document.hidden) recargarEstado(); }, 45000);
 // Mientras hay una ingesta en marcha, refresco rápido para que el panel
 // reaccione en cuanto termine (botones, franja de boletines y listas).
-setInterval(() => { if (estado?.ingestaEnCurso) recargarEstado(); }, 4000);
+setInterval(() => { if (!document.hidden && estado?.ingestaEnCurso) recargarEstado(); }, 4000);
+document.addEventListener("visibilitychange", () => { if (!document.hidden) recargarEstado(); });

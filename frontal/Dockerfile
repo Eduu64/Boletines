@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 # ─────────────────────────────────────────────────────────────────────────────
-# OpoAlerta Docker v2.3.10 · imagen del FRONTAL del panel (modo reforzado)
+# OpoAlerta Docker v2.3.11 · imagen del FRONTAL del panel (modo reforzado)
 #
 # ¿Por qué existe? Docker NO puede publicar puertos de un contenedor que solo
 # está en redes «internal: true»: los puertos publicados se instalan a través

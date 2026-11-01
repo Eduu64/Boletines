@@ -51,11 +51,18 @@ function tarjetaFuente(f) {
   </div>`;
 }
 
+// Último JSON pintado (sin la RAM, que siempre fluctúa): si el estado no ha
+// cambiado desde el sondeo anterior, no se repinta nada (v2.3.11).
+let ultimoEstado = null;
+
 async function cargar() {
   try {
     const res = await fetch("/api/estado", { cache: "no-store" });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const datos = await res.json();
+    const texto = JSON.stringify({ ...datos, ram: null });
+    if (texto === ultimoEstado) return;
+    ultimoEstado = texto;
 
     $("e-total").textContent = datos.stats.totalConvocatorias;
     $("e-fecha").textContent = datos.ultimaFechaBOE ? fechaBonita(datos.ultimaFechaBOE) : "—";
@@ -92,4 +99,7 @@ async function cargar() {
 }
 
 cargar();
-setInterval(cargar, 45000);
+// Sondeo en pausa mientras la pestaña del navegador no esté visible; refresco
+// inmediato al volver a ella (v2.3.11).
+setInterval(() => { if (!document.hidden) cargar(); }, 45000);
+document.addEventListener("visibilitychange", () => { if (!document.hidden) cargar(); });

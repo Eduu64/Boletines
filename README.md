@@ -20,6 +20,15 @@ node servidor/indice.mjs    # panel en http://localhost:3000
 
 ---
 
+## Novedades v2.3.11
+
+- **Rendimiento del panel y de «Estado del servicio»** (cero cambios funcionales: lo mismo, pero antes):
+  - El esquema de la base de datos se comprueba **una vez por proceso** y no en cada petición a la API (antes: ~27 sentencias DDL sincrónicas por sondeo — trabajo invisible que pesaba en equipos modestos).
+  - `/api/estado` lleva **caché de 3 segundos** invalidada por cualquier escritura: el panel sondea cada 45 s (y cada 4 s durante una ingesta) y la página de estado cada 45 s — los sondeos seguidos comparten la misma respuesta en lugar de repetir las consultas de SQLite; tras «Ingestar ahora» o guardar ajustes se recalcula siempre.
+  - **Índice nuevo** `IngestaLog(fuente, fechaBOE, createdAt)`: el «estado por fuente» (ventana `PARTITION BY fuente`) y el resumen `GROUP BY fuente` pasan de recorrer y ordenar la tabla entera a leer el índice (DDL idempotente: se crea solo al arrancar, también sobre tu base existente).
+  - **Frontend espabilado**: si el estado no ha cambiado no se repinta nada (la RAM, que fluctúa en cada sondeo, no cuenta para la comparación) y el sondeo se pausa mientras la pestaña del navegador no está visible.
+  - **Registro de peticiones lentas**: cualquier respuesta de más de 800 ms se anota en el log del contenedor (`[opoalerta] lento: GET /api/estado — 912 ms`) — si algo vuelve a notarse lento, habrá un dato concreto y no una impresión.
+
 ## Novedades v2.3.10
 
 - **Corregido el empaquetado del frontal (bug de la v2.3.9: imposible de construir)**. Su servicio usaba `build: ./frontal`, así que el contexto de construcción era SOLO la carpeta `frontal/` y los `COPY servidor/cortafuegos.mjs` / `COPY frontal/frontal.mjs` del `frontal/Dockerfile` — rutas relativas a la raíz del proyecto — fallaban siempre con `«/frontal/frontal.mjs» not found`. No era un problema de cómo copiaras los archivos: ningún despliegue de la v2.3.9 pudo construir el frontal. Ahora el servicio declara `context: .` + `dockerfile: frontal/Dockerfile` (contexto = raíz, rutas de COPY correctas). **Para actualizar**: sustituye tu carpeta del proyecto por este zip (o al menos `docker-compose.reforzado.yml`) y recrea: `docker compose -f docker-compose.reforzado.yml up -d --build`.
@@ -217,5 +226,6 @@ node scripts/prueba-fuentes.mjs 20261031    # ingesta real de los 16 boletines (
 - **v2.3.8**: el panel vuelve a ser accesible en el modo reforzado con un contenedor **frontal** que publica el puerto (Docker no publica puertos de contenedores solo en redes `internal: true` — [moby/moby#53256](https://github.com/moby/moby/discussions/53256)); la app conserva su red sin internet; topología reforzada de 3 contenedores en script, compose y docs.
 - **v2.3.9**: el frontal deja de ser una tubería socat ciega y aplica el **mismo cortafuegos de entrada** que la app (módulo compartido `permitirEntrada`) a la IP real del visitante: una IP pública recibe el 403 en la puerta, antes de tocar la app; la app conserva su filtro como segunda capa (`LIMITE_FRONTAL=64m`).
 - **v2.3.10**: corregido el empaquetado del frontal de la v2.3.9 (con `build: ./frontal` los `COPY` fallaban siempre: «/frontal/frontal.mjs not found»; ahora `context: .` + `dockerfile: frontal/Dockerfile`) y `.dockerignore` en la raíz (contextos de build mínimos; el `.env` nunca sube al demonio).
+- **v2.3.11**: rendimiento del panel — esquema comprobado una vez por proceso (antes: ~27 DDL por petición), caché de 3 s en `/api/estado` (invalidada en escrituras), índice `IngestaLog(fuente, fechaBOE, createdAt)` para el estado por fuente, repintado del frontend solo si el estado cambió y sondeo en pausa con la pestaña oculta; registro de peticiones >800 ms.
 
 Datos de los boletines oficiales: reutilización permitida citando la fuente (ver licencia de cada uno en el panel). Código inspirado en [opoalerta/opoalerta](https://github.com/opoalerta/opoalerta).
