@@ -1,11 +1,11 @@
 # ─────────────────────────────────────────────────────────────────────────────
-# OpoAlerta Docker v2.3.6 · MODO REFORZADO (proxy interno de salida)
+# OpoAlerta Docker v2.3.9 · MODO REFORZADO (proxy interno de salida)
 #
 #   docker compose -f docker-compose.reforzado.yml up -d --build
 #
-# 100 % Docker: dos contenedores (app + proxy) y dos redes de Docker. El
-# sistema operativo del host NO se toca: sin iptables, sin ufw, sin servicios
-# ni usuarios nuevos — solo comandos de «docker compose».
+# 100 % Docker: tres contenedores (frontal + app + proxy) y dos redes de
+# Docker. El sistema operativo del host NO se toca: sin iptables, sin ufw,
+# sin servicios ni usuarios nuevos — solo comandos de «docker compose».
 #
 # Diferencia con docker-compose.yml: el contenedor de la app vive en una red
 # Docker SIN internet (internal: true) y su ÚNICA vía de salida es un proxy
@@ -13,12 +13,17 @@
 # Dos capas: la lista blanca dentro de la app (CORTAFUEGOS_SALIDA, sigue
 # activa) y la lista blanca en la red. Aunque el código de la app se viera
 # comprometido, ninguna conexión a otro destino saldría: muere en la red.
-# Tampoco puede iniciar conexiones a tu LAN (192.168.x.x). El panel se publica
-# en todas las interfaces (PUERTO_PUBLICADO=0.0.0.0) pero la app SOLO contesta
-# a IPs privadas — tu red local, redes Docker y loopback (CORTAFUEGOS_ENTRADA);
-# una IP pública de internet recibe un 403 inmediato. Si quieres además que
-# Docker ni siquiera escuche en la interfaz pública: PUERTO_PUBLICADO=<IP-LAN>.
-# Coste: ~25 MB de RAM extra.
+# Tampoco puede iniciar conexiones a tu LAN (192.168.x.x). El puerto del panel
+# lo publica el contenedor «frontal» (una puerta de entrada con cortafuegos
+# hacia la app): Docker no puede publicar puertos de una red interna
+# (moby/moby#53256) y por eso el frontal va aparte. El frontal aplica el MISMO
+# cortafuegos de entrada (CORTAFUEGOS_ENTRADA) a la IP real del visitante: una
+# IP pública recibe un 403 en el frontal, antes de tocar la app (la app lo ve
+# todo desde la IP privada del frontal, y conserva su filtro como 2.ª capa).
+# Si quieres además que Docker ni siquiera escuche en la interfaz pública:
+# PUERTO_PUBLICADO=<IP-LAN>. Coste: ~70 MB de RAM extra (Squid ~23, frontal
+# ~45 — es Node, para reutilizar el mismo filtro; comparte capas de imagen
+# con la app, así que en disco apenas añade nada).
 #
 # Verificación: bash scripts/prueba-proxy.sh
 #
@@ -33,16 +38,14 @@
 services:
   opoalerta:
     build: .
-    image: opoalerta-docker:2.3.6
+    image: opoalerta-docker:2.3.9
     container_name: opoalerta
     restart: unless-stopped
-    ports:
-      # La entrada al panel la controlan DOS capas (ver CORTAFUEGOS_ENTRADA en
-      # environment): la app solo contesta a IPs privadas (tu LAN), y esta
-      # publicación decide en qué interfaz escucha Docker. 0.0.0.0 = todas
-      # (inmune a cambios de IP por DHCP); <IP-LAN-del-servidor> = Docker ni
-      # siquiera abre el puerto en la interfaz pública (más estricto).
-      - "${PUERTO_PUBLICADO:-0.0.0.0}:${PUERTO:-3000}:3000"
+    # SIN «ports:»: Docker no puede publicar puertos de un contenedor que solo
+    # vive en redes «internal: true» (no tiene puerta de enlace donde publicar:
+    # moby/moby#53256 — la config se acepta pero NetworkSettings.Ports queda
+    # vacía). El panel entra por el contenedor «frontal» (más abajo). La app
+    # conserva así su red sin internet y sin acceso a tu LAN.
     environment:
       # Base de datos (SQLite dentro del volumen, no tocar)
       DATABASE_URL: file:/app/data/opoalerta.db
@@ -100,7 +103,7 @@ services:
 
   proxy:
     build: ./proxy
-    image: opoalerta-proxy:2.3.6
+    image: opoalerta-proxy:2.3.9
     container_name: opoalerta-proxy
     restart: unless-stopped
     networks: [interna, salida]
@@ -114,6 +117,48 @@ services:
       interval: 60s
       timeout: 5s
       retries: 3
+
+  frontal:
+    # Puerta de ENTRADA al panel en el modo reforzado. Docker no publica
+    # puertos de contenedores que solo están en redes internas (moby/moby#53256),
+    # así que este contenedor — frontal/frontal.mjs, ~40 líneas de Node —
+    # recibe el puerto publicado, comprueba la IP real del visitante con el
+    # MISMO cortafuegos de entrada que la app (una IP pública recibe un 403
+    # aquí, antes de tocar la app) y reenvía a opoalerta:3000. No ejecuta
+    # código de la app, no guarda nada. Está en la red «salida» SOLO para que
+    # Docker tenga dónde publicar el puerto; nunca conecta a nada que no sea
+    # la app.
+    build: ./frontal
+    image: opoalerta-frontal:2.3.9
+    container_name: opoalerta-frontal
+    restart: unless-stopped
+    ports:
+      # 0.0.0.0 = todas las interfaces (recomendado, inmune a cambios de IP por
+      # DHCP); <IP-LAN-del-servidor> = Docker ni siquiera abre el puerto en la
+      # interfaz pública (más estricto; requiere IP fija o reserva DHCP).
+      - "${PUERTO_PUBLICADO:-0.0.0.0}:${PUERTO:-3000}:3000"
+    networks: [interna, salida]
+    mem_limit: ${LIMITE_FRONTAL:-64m}
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    depends_on:
+      - opoalerta
+    environment:
+      TZ: ${TZ:-Europe/Madrid}
+      # CORTAFUEGOS_ENTRADA controla la puerta (el frontal) y la app a la vez:
+      # con «lan» (por defecto) solo pasan IPs privadas; con «off» ambas capas
+      # atienden a cualquiera. No hace falta definirlo: comparte el valor del
+      # .env como el resto de variables.
+      CORTAFUEGOS_ENTRADA: ${CORTAFUEGOS_ENTRADA:-lan}
+    healthcheck:
+      # Pasa por el frontal hasta la app: chequeo de extremo a extremo
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/api/health"]
+      interval: 60s
+      timeout: 8s
+      retries: 3
+      start_period: 10s
 
 networks:
   interna:

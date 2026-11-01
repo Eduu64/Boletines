@@ -1,4 +1,4 @@
-# OpoAlerta Docker v2.3.6
+# OpoAlerta Docker v2.3.9
 
 Alertas personales de **ofertas de empleo público** (oposiciones, personal laboral, bolsas): ingesta diaria del **BOE y de 15 boletines oficiales más**, panel web local y avisos automáticos a **Discord**.
 
@@ -19,6 +19,18 @@ node servidor/indice.mjs    # panel en http://localhost:3000
 ```
 
 ---
+
+## Novedades v2.3.9
+
+- **El frontal del modo reforzado ahora aplica el cortafuegos de entrada**. En la v2.3.8 el frontal era una tubería socat «ciega»: recibía el puerto publicado y reenviaba a la app sin mirar quién llamaba, así que — como advertía el diagnóstico externo — el cortafuegos de entrada de la app dejaba de discriminar (todas las visitas llegaban desde la IP privada del frontal). La v2.3.9 lo convierte en una **puerta con cortafuegos**: `frontal/frontal.mjs` (~60 líneas de Node) aplica **el mismo `permitirEntrada`** de `servidor/cortafuegos.mjs` (módulo compartido, cero divergencia de política) a la **IP real del visitante** — el reenvío de Docker conserva la IP de origen — y una IP pública recibe un **403 en la puerta**, antes de tocar la app. Se recupera así la garantía de la v2.3.3 en el modo reforzado: aunque el puerto acabara expuesto a internet (p. ej. un port-forward del router), internet no obtiene respuesta. La app conserva su filtro como segunda capa. Coste: el frontal pasa de ~3 MB (socat) a ~45 MB (Node), con techo de 64 MB (`LIMITE_FRONTAL`) y compartiendo la base `node:24-alpine` con la app (en disco apenas añade nada). Verificado E2E: loopback atraviesa la tubería (HTTP 200) y una IP no privada real recibe el 403 sin llegar a la app (`scripts/prueba-cortafuegos.mjs`).
+
+## Novedades v2.3.8
+
+- **El panel vuelve a ser accesible en el modo reforzado: contenedor «frontal»**. Causa raíz confirmada con los mantenedores de Docker ([moby/moby#53256](https://github.com/moby/moby/issues/53256)): los puertos publicados se instalan a través de la red de puerta de enlace del contenedor, y un contenedor que SOLO está en redes `internal: true` no tiene ninguna — la configuración se acepta pero **no se publica nada** (`NetworkSettings.Ports` vacía). Por eso la app estaba viva por dentro y el host no la alcanzaba jamás (y por eso `docker compose port` respondía «:0»). Arreglo estándar recomendado por Docker: un contenedor mínimo **frontal** en las redes interna + salida que recibe el puerto publicado y lo reenvía a `opoalerta:3000`. La app sigue **sin internet y sin acceso a tu LAN**; el frontal no ejecuta código de la app ni guarda nada. En la v2.3.8 el frontal era una tubería socat (la IP que la app veía era siempre la del frontal, así que su cortafuegos de entrada dejaba de discriminar: corregido en la v2.3.9). El modo reforzado queda en **tres contenedores** (frontal + app + proxy) y `prueba-proxy.sh` se adapta a la nueva topología: la publicación se comprueba en el frontal y su diagnóstico extra distingue frontal caído / publicación / colisión de subred / cortafuegos del host.
+
+## Novedades v2.3.7
+
+- **Diagnóstico extra del paso C** (app viva + puerto publicado + el host no llega): el script prueba ahora DIRECTO al contenedor por su IP (saltando docker-proxy y el DNAT), muestra la publicación real según `docker inspect` (el `docker compose port` tiene un bug que responde `:0`), lo que escucha en el puerto del host y **la ruta que sigue el host hacia el contenedor**. Con eso distingue en un vistazo los 3 casos: capa de publicación de Docker (arreglo: `systemctl restart docker`), **colisión de subred con una VPN u otra red en 172.x** (la ruta no va por el bridge; arreglo: mover una de las dos redes) y cortafuegos del host (ufw/firewalld/OUTPUT).
 
 ## Novedades v2.3.6
 
@@ -122,7 +134,7 @@ En el BOE, la **2A es «Nombramientos, situaciones e incidencias»**: solo comun
 
 **El panel solo al alcance de tu red (v2.3.3)**: el espejo del cortafuegos de salida — ahora también de **entrada**. La app mira la IP de origen de cada petición y solo sirve el panel a IPs privadas (tu LAN, redes Docker y loopback); una IP pública recibe un 403 inmediato (`CORTAFUEGOS_ENTRADA=lan` por defecto). Por eso el puerto puede publicarse en todas las interfaces sin miedo: internet no obtiene respuesta. Capa extra opcional: `PUERTO_PUBLICADO=<IP-LAN>` hace que Docker ni siquiera escuche en la interfaz pública. Es todo lógica de la app y publicación estándar de Docker: nada de iptables del host, nada del sistema operativo.
 
-**Todo dentro de Docker, nada del sistema operativo**: el modo reforzado son dos contenedores (app + proxy Squid) y dos redes internas de Docker. No se instala nada en el host, no se toca iptables ni ufw, no hay servicios ni usuarios nuevos del sistema: el aislamiento lo hace Docker con `internal: true` y el filtrado lo hace el contenedor del proxy. Lo único que Docker publica fuera, como siempre, es el puerto del panel y el volumen con nombre `opoalerta-data` (la base de datos).
+**Todo dentro de Docker, nada del sistema operativo**: el modo reforzado son tres contenedores (**frontal** con cortafuegos + app + proxy Squid) y dos redes de Docker. No se instala nada en el host, no se toca iptables ni ufw, no hay servicios ni usuarios nuevos del sistema: el aislamiento lo hace Docker con `internal: true` y el filtrado lo hacen el contenedor del proxy y el frontal. El puerto del panel lo publica el **frontal** — la puerta de entrada, que aplica el mismo cortafuegos solo-LAN a la IP real del visitante (una IP pública recibe 403 antes de tocar la app) y reenvía a la app, porque Docker no puede publicar puertos de redes internas ([moby/moby#53256](https://github.com/moby/moby/issues/53256)) — y el volumen con nombre `opoalerta-data` (la base de datos).
 
 ## Tus datos: dónde viven y cómo copiarlos
 
@@ -164,6 +176,7 @@ La app solo inicia conexiones HTTPS (443) hacia los portales oficiales y Discord
 | `DISCORD_BOT_TOKEN` / `DISCORD_CANAL_ID` | — | Bot global (también desde la web) |
 | `ADMIN_TOKEN` | — | Si se define, exige `x-admin-token` en toda escritura de la API y en la consola |
 | `LIMITE_MEMORIA` | `256m` | Techo del contenedor (la app ronda 50-80 MB) |
+| `LIMITE_FRONTAL` | `64m` | Techo del contenedor «frontal» del modo reforzado (ronda 40-50 MB) |
 | `PERMITIR_WEBHOOKS_LOCALES` | — | Solo pruebas: permite webhooks `http://127.0.0.1` |
 | `CORTAFUEGOS_SALIDA` | `lista` | Lista blanca de salida activa; `off` la desactiva |
 | `SALIDA_EXTRA` | — | Dominios extra permitidos, separados por comas (p. ej. proxy corporativo) |
@@ -174,7 +187,7 @@ La app solo inicia conexiones HTTPS (443) hacia los portales oficiales y Discord
 node scripts/prueba-completa.mjs            # batería completa (recomendado; limpia su BD sola)
 node scripts/prueba-fixtures.mjs            # 16 parsers con fixtures reales del proyecto original
 node scripts/test-matching-e2e.js           # matching offline (personal laboral incluido)
-node scripts/prueba-cortafuegos.mjs         # cortafuegos de salida: lista blanca e interruptores
+node scripts/prueba-cortafuegos.mjs         # cortafuegos de salida e entrada (lista blanca, interruptores y frontal con su 403)
 node scripts/prueba-proxy.sh                # modo reforzado con proxy interno (requiere Docker y el stack en marcha; diagnostica si no lo está)
 node scripts/prueba-fallback.mjs            # cuádruple respaldo del BOE (con scripts/boe-falso.mjs)
 node scripts/prueba-e2e.mjs                 # pipeline completo: demo → matching → Discord (mock)
@@ -194,5 +207,8 @@ node scripts/prueba-fuentes.mjs 20261031    # ingesta real de los 16 boletines (
 - **v2.3.4**: la base de datos pasa de `./data` (bind mount con problemas de permisos: Docker creaba la carpeta como root y la app no podía escribir) a un **volumen con nombre** `opoalerta-data` (permisos correctos desde la imagen, estable entre modos y renombres de carpeta; `down -v` lo borra — ver «Tus datos»).
 - **v2.3.5**: `scripts/prueba-proxy.sh` con diagnóstico completo (comprobaciones previas del stack, detalle real de cada fallo, salud del proxy, fallback a wget, puerto leído del `.env`).
 - **v2.3.6**: prueba del panel como **escalera de diagnóstico A→D** (app → publicación de Docker → loopback → LAN, con causa y arreglo por paso), `curl`/`wget` ajenos al proxy del entorno (fin de los falsos «panel no accesible») y detección de bucles de reinicio de la app.
+- **v2.3.7**: prueba directa del host al contenedor por su IP (salta la capa de publicación), publicación real por `docker inspect` (bug `:0` de `compose port`), escucha real del puerto en el host y **detector de colisión de subred** (la ruta del host al contenedor no va por el bridge: VPN u otra red en 172.x) en el diagnóstico del paso C.
+- **v2.3.8**: el panel vuelve a ser accesible en el modo reforzado con un contenedor **frontal** que publica el puerto (Docker no publica puertos de contenedores solo en redes `internal: true` — [moby/moby#53256](https://github.com/moby/moby/issues/53256)); la app conserva su red sin internet; topología reforzada de 3 contenedores en script, compose y docs.
+- **v2.3.9**: el frontal deja de ser una tubería socat ciega y aplica el **mismo cortafuegos de entrada** que la app (módulo compartido `permitirEntrada`) a la IP real del visitante: una IP pública recibe el 403 en la puerta, antes de tocar la app; la app conserva su filtro como segunda capa (`LIMITE_FRONTAL=64m`).
 
 Datos de los boletines oficiales: reutilización permitida citando la fuente (ver licencia de cada uno en el panel). Código inspirado en [opoalerta/opoalerta](https://github.com/opoalerta/opoalerta).

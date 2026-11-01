@@ -4,7 +4,9 @@
 // red, que el panel solo se sirve a IPs privadas, y los interruptores
 // CORTAFUEGOS_SALIDA=off, CORTAFUEGOS_ENTRADA=off y SALIDA_EXTRA (hijos).
 import http from "node:http";
-import { spawnSync } from "node:child_process";
+import net from "node:net";
+import os from "node:os";
+import { spawn, spawnSync } from "node:child_process";
 
 const RAIZ = new URL("..", import.meta.url).pathname;
 let fallos = 0;
@@ -132,6 +134,77 @@ function hijoEntrada(env, ip) {
 }
 ok("CORTAFUEGOS_ENTRADA=off atiende a cualquiera", hijoEntrada({ CORTAFUEGOS_ENTRADA: "off" }, "8.8.8.8") === "PERMITIDA", "");
 ok("por defecto una IP pública queda fuera", hijoEntrada({}, "9.9.9.9") === "BLOQUEADA", "");
+
+// ─── FRONTAL del modo reforzado: publica y filtra (E2E con el frontal real) ─
+// Levanta la «app» falsa y el frontal REAL (frontal/frontal.mjs) apuntándole:
+// una conexión por loopback debe atravesar la tubería (200 de la app) y una
+// conexión desde una IP no privada de este entorno debe recibir el 403 del
+// cortafuegos de entrada sin llegar a la app.
+{
+  const srvApp = http.createServer((_req, res) => {
+    res.writeHead(200, { "Content-Type": "text/plain" });
+    res.end("saludo de la app falsa (atraviesa el frontal)");
+  });
+  await new Promise((r) => srvApp.listen(4199, "127.0.0.1", r));
+
+  const frontal = spawn(process.execPath, [`${RAIZ}/frontal/frontal.mjs`], {
+    env: { ...process.env, PORT: "4200", HOST: "0.0.0.0", DESTINO_HOST: "127.0.0.1", DESTINO_PUERTO: "4199" },
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  let salidaFrontal = "";
+  frontal.stdout.on("data", (d) => (salidaFrontal += d));
+  frontal.stderr.on("data", (d) => (salidaFrontal += d));
+  const arriba = await new Promise((res) => {
+    const t = setInterval(() => {
+      if (/frontal escuchando/.test(salidaFrontal)) {
+        clearInterval(t);
+        res(true);
+      }
+    }, 50);
+    setTimeout(() => {
+      clearInterval(t);
+      res(false);
+    }, 4000);
+  });
+  ok("frontal arranca y escucha", arriba, salidaFrontal.split("\n")[0].slice(0, 90));
+
+  if (arriba) {
+    try {
+      const r = await fetch("http://127.0.0.1:4200/api/health");
+      const texto = await r.text();
+      ok("frontal: loopback atraviesa la tubería hasta la app", r.status === 200 && texto.includes("app falsa"), `HTTP ${r.status}`);
+    } catch (e) {
+      ok("frontal: loopback atraviesa la tubería hasta la app", false, e.message);
+    }
+
+    // Si este entorno tiene alguna IPv4 que el cortafuegos considera no privada,
+    // una conexión a ella debe recibir el 403 del frontal (la app ni se entera).
+    const ipGlobal = [...new Set(Object.values(os.networkInterfaces()).flat())]
+      .filter((i) => i && !i.internal && !String(i.address).includes(":") && permitirEntrada(i.address) === false)
+      .map((i) => i.address)[0];
+    if (ipGlobal) {
+      const codigo = await new Promise((res) => {
+        const s = net.connect(4200, ipGlobal);
+        let data = "";
+        s.on("data", (d) => {
+          data += d;
+          s.destroy();
+        });
+        s.on("close", () => res(/HTTP\/1\.1 403/.test(data) ? 403 : 0));
+        s.on("error", () => res(0));
+        setTimeout(() => {
+          s.destroy();
+          res(/HTTP\/1\.1 403/.test(data) ? 403 : 0);
+        }, 2000);
+      });
+      ok(`frontal: una IP no privada (${ipGlobal}) recibe 403 sin tocar la app`, codigo === 403, `respuesta: ${codigo || "sin datos"}`);
+    } else {
+      console.log("ℹ️  (este entorno no tiene ninguna IP no privada: el 403 del frontal queda cubierto por los unit-tests de permitirEntrada)");
+    }
+  }
+  frontal.kill();
+  srvApp.close();
+}
 
 // ─── Interruptores por variables de entorno (procesos hijos) ────────────────
 function hijo(env, url) {

@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 # ─────────────────────────────────────────────────────────────────────────────
-# OpoAlerta Docker v2.3.6 · imagen minimalista
+# OpoAlerta Docker v2.3.9 · imagen minimalista
 # · Sin build: el código se ejecuta tal cual (Node puro, cero dependencias npm)
 # · node:24-alpine (LTS): trae node:sqlite estable integrado
 # · Un solo proceso: servidor HTTP + programador + SQLite (node:sqlite)

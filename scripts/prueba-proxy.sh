@@ -75,6 +75,12 @@ if ! echo "$SERVICIOS" | grep -qx "proxy"; then
   echo "⚠️  El contenedor «proxy» no está en marcha: las salidas por proxy fallarán."
   $C logs --tail 15 proxy 2>&1 | sed 's/^/   │ /'
 fi
+if ! echo "$SERVICIOS" | grep -qx "frontal"; then
+  echo "⚠️  El contenedor «frontal» no está en marcha: el panel NO será accesible."
+  echo "   (Si tu stack es anterior a v2.3.9 no tiene frontal o lo tiene sin filtro: actualiza y recrea:"
+  echo "    docker compose -f docker-compose.reforzado.yml up -d --build --force-recreate)"
+  $C logs --tail 15 frontal 2>&1 | sed 's/^/   │ /'
+fi
 
 # ¿La app está en bucle de reinicios? (con exec las pruebas de red pasarían
 # igual, pero el panel estaría muerto: síntoma clásico «4 pasan y falla el panel»)
@@ -82,6 +88,7 @@ ESTADO=$(docker inspect -f '{{.State.Status}}|{{.RestartCount}}|{{.State.ExitCod
 EST=$(echo "$ESTADO" | cut -d'|' -f1); REINICIOS=$(echo "$ESTADO" | cut -d'|' -f2)
 SALIDA=$(echo "$ESTADO" | cut -d'|' -f3); OOM=$(echo "$ESTADO" | cut -d'|' -f4)
 echo "✅ Contenedor «opoalerta»: estado=$EST reinicios=$REINICIOS última_salida=$SALIDA oom=$OOM"
+echo "   · frontal: $(docker inspect -f '{{.State.Status}}' frontal 2>/dev/null || echo '¿no existe?') · proxy: $(docker inspect -f '{{.State.Status}}' proxy 2>/dev/null || echo '¿no existe?')"
 if [ "$EST" = "restarting" ] || [ "${REINICIOS:-0}" -ge 3 ] 2>/dev/null; then
   echo "⚠️  La app se está REINICIANDO EN BUCLE: el panel no funcionará aunque el resto pase."
   echo "   Últimas líneas del log (la causa del reinicio está aquí):"
@@ -165,13 +172,22 @@ else
   PASO_A=0
 fi
 
-# B) ¿Docker publica el puerto? ¿En qué interfaz?
-PUBLICACION=$($C port opoalerta 3000 2>/dev/null | head -1)
-if [ -n "$PUBLICACION" ]; then
-  echo "✅ B · Docker publica el puerto como: $PUBLICACION"
+# B) ¿Docker publica el puerto del FRONTAL? ¿En qué interfaz? («docker compose
+#    port» tiene un bug que responde «:0»; docker inspect es la fuente fiable.
+#    El dueño de la publicación es el frontal: la app vive en una red interna
+#    y Docker no publica puertos de redes internas — moby/moby#53256)
+PUBLICACION=$($C port frontal 3000 2>/dev/null | head -1)
+PUBREAL=$(docker inspect -f '{{range $p, $b := .NetworkSettings.Ports}}{{$p}} ← {{range $b}}{{.HostIp}}:{{.HostPort}} {{end}}{{end}}' frontal 2>/dev/null)
+if [ -n "$PUBLICACION" ] && ! echo "$PUBLICACION" | grep -q ':0$'; then
+  echo "✅ B · Docker publica el puerto (frontal) como: $PUBLICACION"
+  PASO_B=1
+elif [ -n "$PUBREAL" ]; then
+  echo "✅ B · publicación real (docker inspect): $PUBREAL   [«compose port» dijo «${PUBLICACION:-nada}»: bug de compose]"
   PASO_B=1
 else
-  echo "❌ B · Docker NO publica el puerto 3000 del contenedor"
+  echo "❌ B · Docker NO publica el puerto 3000 (debería hacerlo el «frontal»)"
+  echo "   · estado del frontal: $(docker inspect -f '{{.State.Status}}' frontal 2>/dev/null || echo '¿no existe? (stack anterior a v2.3.9?)')"
+  $C logs --tail 15 frontal 2>&1 | sed 's/^/   │ /'
   PASO_B=0
 fi
 
@@ -204,6 +220,67 @@ else
   PASO_D=-1
 fi
 
+# ── Diagnóstico extra del paso C: ¿dónde se rompe host → contenedor? ─────────
+# Salta docker-proxy y el DNAT: conecta al FRONTAL y a la app por su IP.
+if [ "$PASO_C" = "0" ] && [ "$PASO_A" = "1" ]; then
+  echo
+  echo "── Diagnóstico extra del paso C (host → contenedores, saltando la publicación)"
+  echo "· Publicación real (docker inspect, frontal): ${PUBREAL:-NINGUNA}"
+  if [ -z "$PUBREAL" ]; then
+    echo "   → NADA está publicado: Docker no publica puertos de contenedores que"
+    echo "     solo están en redes «internal: true» (comportamiento oficial de Docker:"
+    echo "     moby/moby#53256). La v2.3.8 añadió el «frontal» que lo resuelve:"
+    echo "       docker compose -f docker-compose.reforzado.yml up -d --build --force-recreate"
+  else
+    IPFRONTAL=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}} {{end}}' frontal 2>/dev/null | awk '{print $1}')
+    IPOPO=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' opoalerta 2>/dev/null)
+    CODIGO_X=$(curl_inseguro "http://${IPFRONTAL}:3000/api/health")
+    if [ "$CODIGO_X" = "200" ]; then
+      echo "✅ X · el host SÍ llega DIRECTO al frontal http://${IPFRONTAL}:3000 (HTTP 200)"
+      echo "   → Frontal y ruta OK: la rotura está SOLO en la capa de publicación"
+      echo "     (docker-proxy / reglas iptables de Docker). Suele bastar:"
+      echo "       sudo systemctl restart docker"
+      echo "       docker compose -f docker-compose.reforzado.yml up -d"
+      echo "     Si se repite: revisa cadenas manuales →  sudo iptables-save | grep -i docker-user"
+    else
+      echo "❌ X · el host NO llega DIRECTO al frontal http://${IPFRONTAL}:3000 (curl: ${CODIGO_X:-000})"
+      RUTA=$(ip route get "$IPFRONTAL" 2>/dev/null | head -1)
+      echo "· Ruta del host hacia ${IPFRONTAL}: ${RUTA:-no disponible (¿falta el comando ip?)}"
+      case "$RUTA" in
+        *"dev br-")
+          echo "   → La ruta es correcta (bridge de Docker) y aún así no llega: un"
+          echo "     cortafuegos del host está filtrando (ufw/firewalld/OUTPUT)."
+          ;;
+        *"dev ")
+          echo "   → ⚠️ LA RUTA NO VA POR UN BRIDGE DE DOCKER: otra interfaz captura ese"
+          echo "     tráfico (una VPN, otra red del host en 172.x…). COLISIÓN DE SUBRED:"
+          echo "     dentro de Docker todo funciona; desde el host, nada. Pega «ip -br addr»."
+          ;;
+        *)
+          echo "   → No pude determinar la ruta; pega «ip -br addr» y «ip route»."
+          ;;
+      esac
+      if [ -n "$IPOPO" ]; then
+        CODIGO_Y=$(curl_inseguro "http://${IPOPO}:3000/api/health")
+        if [ "$CODIGO_Y" = "200" ]; then
+          echo "✅ Y · el host sí llega directo a la APP (http://${IPOPO}:3000 → 200): el problema"
+          echo "     es solo el FRONTAL (¿caído?). Mira:  $C logs --tail 30 frontal"
+        else
+          echo "❌ Y · tampoco llega directo a la app (http://${IPOPO}:3000 → ${CODIGO_Y:-000}):"
+          echo "     la rotura es de red del host (ruta/cortafuegos), no de la publicación."
+        fi
+      fi
+    fi
+    ESCUCHA=$(ss -tln 2>/dev/null | grep -E "[:.]${PUERTO}[[:space:]]" || true)
+    if [ -n "$ESCUCHA" ]; then
+      echo "· Escuchando en el puerto ${PUERTO} del host: $(echo "$ESCUCHA" | head -2 | tr '\n' ' ')"
+    else
+      echo "· NADA escucha en el puerto ${PUERTO} del host: si la publicación real existe,"
+      echo "  rearma las reglas con  sudo systemctl restart docker"
+    fi
+  fi
+fi
+
 # Veredicto con la causa y el arreglo
 echo
 if [ "$PASO_A" = "0" ]; then
@@ -215,19 +292,26 @@ if [ "$PASO_A" = "0" ]; then
   echo "       docker compose -f docker-compose.reforzado.yml up -d --build"
   echo "     · reinicios con otra causa → pega el bloque del log para verla."
 elif [ "$PASO_B" = "0" ]; then
-  falla "panel inaccesible: el contenedor está vivo pero no publica el puerto (paso B)"
-  echo "   → Causa típica: el stack se creó con un compose anterior (o un .env a medio"
-  echo "     escribir). Recréalo (TUS DATOS NO SE TOCAN, el volumen se conserva):"
-  echo "       docker compose -f docker-compose.reforzado.yml up -d --force-recreate"
-  echo "     Si sigue sin publicar: revisa PUERTO y PUERTO_PUBLICADO en el .env."
+  falla "panel inaccesible: la app está viva pero NADA publica el puerto (paso B)"
+  echo "   → En el modo reforzado el puerto lo publica el contenedor «frontal» (mira"
+  echo "     su estado y su log más arriba). Si tu stack es ANTERIOR a v2.3.9 no"
+  echo "     tiene frontal: actualiza el proyecto y recrea (TUS DATOS NO SE TOCAN,"
+  echo "     el volumen se conserva):"
+  echo "       docker compose -f docker-compose.reforzado.yml up -d --build --force-recreate"
+  echo "     Si el frontal está y aun así no publica: revisa PUERTO y PUERTO_PUBLICADO del .env."
 elif [ "$PASO_C" = "0" ]; then
   falla "panel inaccesible: app viva y puerto publicado, pero el host no llega (paso C)"
-  echo "   → Docker dice «$PUBLICACION» y aun así el host no llega. Causas típicas:"
-  echo "     · PUERTO_PUBLICADO=<IP> en el .env apunta a una IP que YA NO es la del"
-  echo "       servidor (cambió por DHCP): pon 0.0.0.0 (recomendado) y recrea:"
-  echo "         sed -i 's/^PUERTO_PUBLICADO=.*/PUERTO_PUBLICADO=0.0.0.0/' .env"
-  echo "         docker compose -f docker-compose.reforzado.yml up -d --force-recreate"
-  echo "     · Docker sin userland-proxy (raro): revisa «docker info | grep -i proxy»."
+  echo "   → El bloque «Diagnóstico extra del paso C» de arriba distingue los casos:"
+  echo "     1) NADA publicado → stack anterior a v2.3.9 (sin frontal): actualiza y recrea."
+  echo "     2) el host SÍ llega directo al FRONTAL → capa de publicación de Docker:"
+  echo "        sudo systemctl restart docker y luego up -d."
+  echo "     3) el host NO llega al frontal y la ruta no va por un bridge → COLISIÓN de"
+  echo "        subred (una VPN u otra red usa el mismo 172.x): mover una de las dos."
+  echo "     4) el host NO llega y la ruta SÍ va por el bridge → cortafuegos del host"
+  echo "        (ufw/firewalld/OUTPUT) filtrando hacia los contenedores."
+  echo "     · Si PUERTO_PUBLICADO=<IP> apunta a una IP que ya no es la del servidor"
+  echo "       (DHCP): sed -i 's/^PUERTO_PUBLICADO=.*/PUERTO_PUBLICADO=0.0.0.0/' .env"
+  echo "       y recrea: docker compose -f docker-compose.reforzado.yml up -d --force-recreate"
 elif [ "$PASO_D" = "0" ]; then
   falla "panel accesible solo desde el propio servidor, no desde la LAN (paso D)"
   echo "   → Loopback responde (C ✅) pero ${IPLAN}:${PUERTO} no. Causas típicas:"
