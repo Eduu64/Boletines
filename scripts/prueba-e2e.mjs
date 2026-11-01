@@ -1,4 +1,4 @@
-// Prueba E2E del pipeline: ajustes demo → 4 alertas semilla (incluida PERSONAL
+// Prueba E2E del pipeline: ajustes demo → 5 alertas semilla (incluidas PERSONAL
 // LABORAL) + 2 de verificación con webhook local → ingestas → matching → envío
 // a Discord (mock) → verificación de DB, payloads y consola del servidor.
 const BASE = "http://127.0.0.1:3000";
@@ -22,12 +22,12 @@ async function main() {
   const salud = await json("/api/health");
   ok("health responde", salud.status === 200 && salud.data.ok === true);
 
-  // 0b) alertas sembradas automáticamente en el arranque (4, incluida personal laboral)
+  // 0b) alertas sembradas automáticamente en el arranque (5, incluidas personal laboral y TIC/A1-A2)
   const lista = await json("/api/alertas");
   const nombres = (lista.data?.alertas ?? []).map((a) => a.nombre).join(" | ");
   ok(
-    "4 alertas precargadas (militares, arsenales, Madrid TIC, personal laboral)",
-    ["Centros docentes militares", "Arsenales", "Técnico/a Superior TIC", "Personal laboral"].every((t) => nombres.includes(t)),
+    "5 alertas precargadas (militares, arsenales, Madrid TIC, TIC/A1-A2, personal laboral)",
+    ["Centros docentes militares", "Arsenales", "Técnico/a Superior TIC", "Informática · TIC · Grupos A1/A2", "Personal laboral"].every((t) => nombres.includes(t)),
     nombres
   );
 
@@ -93,8 +93,8 @@ async function main() {
     body: JSON.stringify({ fecha: "20261029" }),
   });
   ok(
-    "ingesta 29/10 ok (13 anuncios, 13 nuevos, 5 alertas disparadas, 4 avisos)",
-    i29.status === 200 && i29.data.estado === "ok" && i29.data.itemsSeccion === 13 && i29.data.itemsNuevos === 13 && i29.data.alertasDisparadas === 5 && i29.data.notificados === 4,
+    "ingesta 29/10 ok (13 anuncios, 13 nuevos, 6 alertas disparadas, 4 avisos)",
+    i29.status === 200 && i29.data.estado === "ok" && i29.data.itemsSeccion === 13 && i29.data.itemsNuevos === 13 && i29.data.alertasDisparadas === 6 && i29.data.notificados === 4,
     `fuente=${i29.data?.fuente} items=${i29.data?.itemsSeccion} nuevos=${i29.data?.itemsNuevos} disparadas=${i29.data?.alertasDisparadas} avisos=${i29.data?.notificados}`
   );
 
@@ -113,8 +113,8 @@ async function main() {
     body: JSON.stringify({ fecha: "20261030" }),
   });
   ok(
-    "ingesta 30/10 ok (7 anuncios, 4 alertas disparadas, 5 avisos)",
-    i30.status === 200 && i30.data.estado === "ok" && i30.data.itemsSeccion === 7 && i30.data.itemsNuevos === 7 && i30.data.alertasDisparadas === 4 && i30.data.notificados === 5,
+    "ingesta 30/10 ok (7 anuncios, 5 alertas disparadas, 5 avisos)",
+    i30.status === 200 && i30.data.estado === "ok" && i30.data.itemsSeccion === 7 && i30.data.itemsNuevos === 7 && i30.data.alertasDisparadas === 5 && i30.data.notificados === 5,
     `items=${i30.data?.itemsSeccion} nuevos=${i30.data?.itemsNuevos} disparadas=${i30.data?.alertasDisparadas} avisos=${i30.data?.notificados}`
   );
 
@@ -175,7 +175,7 @@ async function main() {
   ok("estado: 20 convocatorias guardadas", est.data?.stats?.totalConvocatorias === 20, `total=${est.data?.stats?.totalConvocatorias}`);
   ok("estado: notificaciones OK >= 9", (est.data?.stats?.notificacionesOk ?? 0) >= 9, `ok=${est.data?.stats?.notificacionesOk}`);
   ok("estado: 16 boletines en el registro de fuentes", (est.data?.fuentes ?? []).length === 16, `fuentes=${(est.data?.fuentes ?? []).length}`);
-  ok("estado: versión 2.3.11", est.data?.version === "2.3.11", `version=${est.data?.version}`);
+  ok("estado: versión 2.3.12", est.data?.version === "2.3.12", `version=${est.data?.version}`);
 }
 
 main().catch((e) => {

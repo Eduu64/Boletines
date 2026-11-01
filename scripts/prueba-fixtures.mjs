@@ -165,13 +165,14 @@ const leer = (f) => readFileSync(join(FIXTURES, f), "utf8");
   ok("CIDO: urls del portal", items.every((i) => (i.urlHtml ?? "").includes("cido.diba.cat")));
 }
 
-// ─── EPSO (HTML UE) ─────────────────────────────────────────────────────────
+// ─── EPSO (HTML UE, plataforma selection.eu-careers.europa.eu) ──────────────
 {
   const { montar } = await import(join(RAIZ, "servidor", "fuentes", "epso.mjs"));
   const items = montar(leer("epso-lista.html"));
-  ok("EPSO: 3 filas (fixture original)", items.length === 3, `${items.length} items`);
+  ok("EPSO: 3 filas (fixture real, plataforma selection)", items.length === 3, `${items.length} items`);
   ok("EPSO: referencia en el título", items.every((i) => /\((EU|EPSO|CAST|AD|AST)/i.test(i.titulo) || i.titulo.includes("(")), items[0]?.titulo);
   ok("EPSO: organismo UE", items.every((i) => i.organismo === "Unión Europea (EPSO)"));
+  ok("EPSO: ids epso-… y url del dominio selection", items.every((i) => i.identificador.startsWith("epso-") && i.urlHtml.startsWith("https://selection.eu-careers.europa.eu/")), items[0]?.urlHtml);
 }
 
 // ─── BOE página del día (HTML real 30/10/2026, con índice de navegación) ────

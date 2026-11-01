@@ -1,4 +1,4 @@
-/* Prueba E2E del matching: títulos reales simulados contra las 4 alertas semilla (incluida PERSONAL LABORAL) */
+/* Prueba E2E del matching: títulos reales simulados contra las 5 alertas semilla (incluida PERSONAL LABORAL y la TIC/A1-A2) */
 
 // Replicamos la lógica de matching.ts (misma normalización) para probar offline
 const norm = (t) => (t ?? '')
@@ -14,6 +14,7 @@ const alertas = [
   { nombre: 'Armada · Ingenieros Técnicos de Arsenales', kws: ['Arsenales de la Armada', 'Ingenieros Técnicos de Arsenales', 'Cuerpo de Ingenieros Técnicos de Arsenales', 'Cuerpo Ingenieros Técnicos de Arsenales de la Armada'] },
   { nombre: 'Ayuntamiento de Madrid · Técnico/a Superior TIC', kws: ['Tecnologías de la Información y la Comunicación', 'Superior TIC', 'Técnico/a Superior TIC', 'Ayuntamiento de Madrid'] },
   { nombre: 'Empleo público · Personal laboral e Ingeniería de obra', kws: ['personal laboral', 'ingeniero de obras', 'ingeniero de obra', 'ingeniero técnico de obras públicas', 'ingeniero técnico de obras públicas e instalaciones', 'ingeniería de obra', 'obra civil', 'ingeniero de caminos'] },
+  { nombre: 'Informática · TIC · Grupos A1/A2', kws: ['informática', 'informático', 'TIC', 'tecnologías de la información', 'sistemas y tecnologías de la información', 'técnico superior TIC', 'ciberseguridad', 'ciencia de datos', 'administración electrónica', 'ingeniero informático', 'ingeniería informática', 'grupo A1', 'grupo A2'] },
 ];
 
 // Los 3 títulos reales tal como aparecerían en el BOE/BOCM
@@ -46,6 +47,23 @@ const titulos = [
     etiqueta: 'BOCYL · Bolsa de empleo temporal (personal laboral)',
     texto: 'ORDEN PRE/1108/2026, de 23 de octubre, por la que se convoca la constitución de la bolsa de empleo temporal del personal laboral del Cuerpo de Ayudantes Facultativos (Inspectores de Campo) de la Administración de la Comunidad de Castilla y León',
   },
+  {
+    etiqueta: 'BOE · Cuerpo de Gestión de Sistemas y Tecnologías de la Información (A1)',
+    texto: 'Orden HAC/876/2026, de 12 de octubre, por la que se convoca proceso selectivo para ingreso, por el sistema general de acceso libre, en el Cuerpo de Gestión de Sistemas y Tecnologías de la Información de la Administración del Estado (Grupo A1)',
+  },
+  {
+    etiqueta: 'EPSO · Ciberseguridad (AD 5)',
+    texto: 'Ciberseguridad (EPSO/AD/430/26 - 2)',
+  },
+  {
+    etiqueta: 'BOCM · Técnico/a Superior TIC (grupo A2)',
+    texto: 'Bases para la selección de personal funcionario de carrera, escala técnica, plaza de Técnico/a Superior TIC (Grupo A2) del Ayuntamiento de Getafe',
+  },
+  {
+    etiqueta: 'BOE · Corrección de errores (actividad administrativa, C1) — NO debe coincidir con ninguna alerta',
+    espera: 'ninguna',
+    texto: 'Corrección de errores de la Resolución de 15 de octubre de 2026, de la Universidad de Alicante, por la que se convoca concurso de méritos para la provisión de puestos de trabajo de Actividad Administrativa (Subgrupo C1)',
+  },
 ];
 
 let fallos = 0;
@@ -57,11 +75,14 @@ for (const t of titulos) {
       if (texto.includes(norm(k))) { coincidencias.push(`${a.nombre} ← «${k}»`); break; }
     }
   }
-  if (coincidencias.length === 0) fallos++;
+  if (t.espera === 'ninguna') {
+    if (coincidencias.length > 0) fallos++;
+  } else if (coincidencias.length === 0) fallos++;
   console.log(`\n▶ ${t.etiqueta}`);
   console.log('  Normalizado:', texto.slice(0, 90) + '…');
   coincidencias.forEach(c => console.log('  ✓ MATCH:', c));
-  if (coincidencias.length === 0) console.log('  ✗ SIN MATCH');
+  if (t.espera === 'ninguna') console.log(coincidencias.length === 0 ? '  ✓ SIN MATCH (correcto)' : '  ✗ ¡COINCIDIÓ Y NO DEBÍA!');
+  else if (coincidencias.length === 0) console.log('  ✗ SIN MATCH');
 }
-console.log(fallos === 0 ? '\n== RESULTADO: los 7 títulos coinciden con sus alertas ✓' : `\n== RESULTADO: ${fallos} título(s) sin match ✗`);
+console.log(fallos === 0 ? '\n== RESULTADO: los 11 títulos coinciden (o no, según lo esperado) ✓' : `\n== RESULTADO: ${fallos} título(s) mal evaluado(s) ✗`);
 process.exit(fallos === 0 ? 0 : 1);

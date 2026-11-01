@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>OpoAlerta · Alertas de empleo público (BOE + 15 boletines)</title>
+  <title>Empleo público · Panel local</title>
   <meta name="description" content="Panel local de alertas de oposiciones y personal laboral: ingesta diaria del BOE y de 15 boletines oficiales, avisos a Discord. Sin telemetría, todo local." />
   <meta name="robots" content="noindex" />
   <meta name="theme-color" content="#059669" />
@@ -13,13 +13,7 @@
 <body>
   <header>
     <div class="barra">
-      <a class="marca" href="/" aria-label="Inicio de OpoAlerta">
-        <img src="/static/logo.svg" alt="" width="38" height="38" />
-        <span class="marca-texto">
-          <span class="marca-nombre">OpoAlerta</span>
-          <span class="marca-sub">Empleo público · BOE + 15 boletines · avisos a Discord</span>
-        </span>
-      </a>
+      <span class="marca-limpia">Empleo público</span>
       <nav class="navegacion" aria-label="Navegación principal">
         <a href="/estado-servicio" title="Estado del servicio">📊 <span class="solo-grande">Estado del servicio</span></a>
         <span class="insignia-modo" id="insignia-modo" title="Comprobando…"><span class="punto-verde" aria-hidden="true"></span> Boletines reales</span>
@@ -144,6 +138,12 @@
         <div class="tarjeta">
           <div class="cabecera"><h2>➕ Alerta nueva</h2><p class="descripcion">El texto del anuncio y las palabras clave se comparan sin acentos ni puntuación</p></div>
           <div class="cuerpo">
+            <div class="fila plantillas" role="group" aria-label="Plantillas de alerta">
+              <span class="texto-suave">Plantillas:</span>
+              <button type="button" class="boton secundario mini" data-plantilla="tic" title="Rellena el formulario con una alerta de informática / TIC (grupos A1 y A2)">💻 Informática · TIC (A1/A2)</button>
+              <button type="button" class="boton secundario mini" data-plantilla="laboral" title="Rellena el formulario con una alerta de personal laboral">🧰 Personal laboral</button>
+              <button type="button" class="boton secundario mini" data-plantilla="obra" title="Rellena el formulario con una alerta de ingeniería de obra">🏗️ Ingeniería de obra</button>
+            </div>
             <form id="form-alerta">
               <div class="campo"><label for="a-nombre">Nombre</label><input id="a-nombre" required placeholder="p. ej. Ingenieros de caminos" /></div>
               <div class="campo">
@@ -287,7 +287,7 @@
     </section>
   </main>
 
-  <footer class="pie"><b>OpoAlerta v2.2.0</b> · todo local, sin telemetría · datos de BOE y boletines oficiales (reutilización citando fuente)</footer>
+  <footer class="pie">Sin telemetría · todo en local · datos de los boletines oficiales</footer>
 
   <!-- Diálogo de edición de alerta -->
   <dialog id="dialogo-alerta">

@@ -1,15 +1,20 @@
 // Fuente EPSO · Oposiciones de la Unión Europea (EU Careers).
 // Las convocatorias de la UE están abiertas a nacionales de cualquier país de
 // la UE. Lista HTML server-side (tabla con <tr class="job-row">):
-//   https://eu-careers.europa.eu/es/job-opportunities/in-progress
+//   https://selection.eu-careers.europa.eu/es/job-opportunities/in-progress
+// (v2.3.12: la plataforma de selección de EU Careers se mudó al subdominio
+// «selection.»; el dominio antiguo eu-careers.europa.eu solo hace un redirect
+// HTTP a él — y ese segundo salto moría en las listas blancas del cortafuegos
+// de salida y del proxy del modo reforzado, que no lo tenían. Ahora se pide
+// directamente al dominio nuevo, sin redirect, y ambos host están permitidos.)
 // El prefijo de la referencia marca el tipo: AD/AST = oposición permanente,
 // CAST = agente contractual. No hay API/RSS oficial.
 // Portado del scraper epso.py del proyecto open source opoalerta.
 
 import { descargar, limpiarHtml } from "../util.mjs";
 
-const LISTA_URL = "https://eu-careers.europa.eu/es/job-opportunities/in-progress";
-const BASE = "https://eu-careers.europa.eu";
+const LISTA_URL = "https://selection.eu-careers.europa.eu/es/job-opportunities/in-progress";
+const BASE = "https://selection.eu-careers.europa.eu";
 
 const ROW_RE = /<tr class="job-row">([\s\S]*?)<\/tr>/g;
 const TITULO_RE = /views-field-title[^>]*>\s*<a href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/;

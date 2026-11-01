@@ -138,7 +138,7 @@ const SONDAS = {
   docm: "https://docm.jccm.es/portaldocm/",
   bopa: "https://miprincipado.asturias.es/bopa/ultimos-boletines?p_r_p_summaryLastBopa=true",
   cido: "https://api.diba.cat/dadesobertes/cido/v1/oposicions?page%5Blimit%5D=1",
-  epso: "https://eu-careers.europa.eu/es/job-opportunities/in-progress",
+  epso: "https://selection.eu-careers.europa.eu/es/job-opportunities/in-progress",
 };
 
 export async function verificarFuentes() {

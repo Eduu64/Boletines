@@ -1,4 +1,4 @@
-// OpoAlerta v2.2.0 · lógica del panel (JavaScript vanilla, sin framework).
+// Panel de empleo público v2.3.12 · lógica del panel (JavaScript vanilla, sin framework).
 // Todas las llamadas van a la API local con credenciales «same-origin».
 // Sin estilos en línea: la CSP los bloquea, todo el aspecto vive en estilo.css.
 
@@ -492,6 +492,33 @@ $("form-alerta").addEventListener("submit", async (ev) => {
     aviso("No se pudo crear la alerta", e.message, true);
   }
 });
+
+// Plantillas de alerta: rellenan el formulario con un clic (editables antes de crear).
+const PLANTILLAS_ALERTA = {
+  tic: {
+    nombre: "Informática · TIC (grupos A1/A2)",
+    keywords:
+      "informática, informático, TIC, tecnologías de la información, sistemas y tecnologías de la información, técnico superior TIC, ciberseguridad, ciencia de datos, administración electrónica, ingeniero informático, ingeniería informática, grupo A1, grupo A2",
+  },
+  laboral: {
+    nombre: "Personal laboral (fijo y temporal)",
+    keywords: "personal laboral, personal laboral fijo, personal laboral temporal",
+  },
+  obra: {
+    nombre: "Ingeniería de obra (civil y obras públicas)",
+    keywords: "ingeniero de obra, ingeniero de obras, ingeniero técnico de obras públicas, ingeniería de obra, obra civil, ingeniero de caminos",
+  },
+};
+for (const boton of document.querySelectorAll("[data-plantilla]")) {
+  boton.addEventListener("click", () => {
+    const plantilla = PLANTILLAS_ALERTA[boton.dataset.plantilla];
+    if (!plantilla) return;
+    $("a-nombre").value = plantilla.nombre;
+    $("a-keywords").value = plantilla.keywords;
+    $("a-modo").value = "cualquiera";
+    $("a-nombre").focus();
+  });
+}
 
 $("e-guardar").addEventListener("click", async (ev) => {
   ev.preventDefault();

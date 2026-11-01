@@ -43,7 +43,8 @@ const HOSTS_BASE = [
   "sede.asturias.es", // BOPA (descargas)
   "api.diba.cat", // CIDO
   "cido.diba.cat", // CIDO (fichas)
-  "eu-careers.europa.eu", // EPSO
+  "eu-careers.europa.eu", // EPSO (dominio clásico: hoy solo redirige)
+  "selection.eu-careers.europa.eu", // EPSO (v2.3.12: plataforma de selección real, a donde redirige el anterior)
   // Discord: API del bot y webhooks (discordapp.com es el dominio antiguo)
   "discord.com",
   "discordapp.com",

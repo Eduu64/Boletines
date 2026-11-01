@@ -1,7 +1,14 @@
 // Alertas precargadas en el primer arranque (solo se crean si no existen).
-// Incluye la de «personal laboral» que pidió el usuario: puestos que NO exigen
-// condición de funcionario (laboral fijo o temporal), sobre todo ingeniería de
-// obra. Avisan de CUALQUIER comunicación (convocatorias, listas, correcciones…).
+// · «personal laboral»: puestos que NO exigen condición de funcionario (laboral
+//   fijo o temporal), sobre todo ingeniería de obra. Avisan de CUALQUIER
+//   comunicación (convocatorias, listas, correcciones…).
+// · «Informática · TIC · Grupos A1/A2» (v2.3.12): peticiones del usuario —
+//   convocatorias para informáticos/TIC, que son los grupos A1/A2. Incluye las
+//   frases «grupo A1»/«grupo A2» (también cazan «subgrupo A1/A2» por
+//   coincidencia de substring) pero NO «A1» a secas: eso dispararía la alerta
+//   con CUALQUIER A1/A2 (administrativos, cuerpos generales…), no solo TIC.
+//   Si quieres también el resto de A1/A2, edita la alerta en el panel y añade
+//   las keywords «A1, A2».
 
 import { obtenerFila, ejecutar, nuevoId } from "./bd.mjs";
 
@@ -32,6 +39,16 @@ export const ALERTAS_SEMILLA = [
     organismo: "Ayuntamiento de Madrid",
     ambito: "todos",
     soloConvocatorias: false,
+  },
+  {
+    id: "alerta-tic-informatica",
+    nombre: "Informática · TIC · Grupos A1/A2",
+    keywords:
+      "informática, informático, TIC, tecnologías de la información, sistemas y tecnologías de la información, técnico superior TIC, ciberseguridad, ciencia de datos, administración electrónica, ingeniero informático, ingeniería informática, grupo A1, grupo A2",
+    modoKeywords: "cualquiera",
+    organismo: null,
+    ambito: "todos",
+    soloConvocatorias: true,
   },
   {
     id: "alerta-empleo-laboral",

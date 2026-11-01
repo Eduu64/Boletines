@@ -1,4 +1,4 @@
-// OpoAlerta v2.2.0 · página «Estado del servicio» (vanilla JS).
+// Panel de empleo público v2.3.12 · página «Estado del servicio» (vanilla JS).
 // Sin estilos en línea (la CSP los bloquea): todo con clases de estilo.css.
 "use strict";
 

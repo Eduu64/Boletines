@@ -1,4 +1,4 @@
-# OpoAlerta Docker v2.3.10
+# OpoAlerta Docker v2.3.12
 
 Alertas personales de **ofertas de empleo público** (oposiciones, personal laboral, bolsas): ingesta diaria del **BOE y de 15 boletines oficiales más**, panel web local y avisos automáticos a **Discord**.
 
@@ -19,6 +19,13 @@ node servidor/indice.mjs    # panel en http://localhost:3000
 ```
 
 ---
+
+## Novedades v2.3.12
+
+- **Portal europeo (EPSO) arreglado**: la plataforma de selección de EU Careers se mudó al subdominio **`selection.eu-careers.europa.eu`** — el dominio clásico `eu-careers.europa.eu` (el que pegaste) solo hace un redirect HTTP hacia él, y ese segundo salto moría en las dos listas blancas (el cortafuegos de salida de la app y el proxy del modo reforzado, que filtran por host exacto), así que la fuente EPSO daba error en el panel. Ahora la lista se pide directamente al dominio nuevo, sin redirect, y ambos hosts están en `servidor/cortafuegos.mjs` y `proxy/dominios.list`. El parser no cambiaba: sobre el HTML real de hoy extrae las 16 ofertas en marcha (Ciberseguridad, IA, Ciencia de datos, Nubes y redes…) y el fixture se ha regenerado con esa página real.
+- **Alerta precargada «Informática · TIC · Grupos A1/A2»**: convocatorias para informáticos — keywords como «informática», «TIC», «tecnologías de la información», «ciberseguridad», «ciencia de datos», «grupo A1», «grupo A2»… Se crea sola al arrancar, también sobre tu base actual (las semillas solo se crean si no existen). Matiz honesto: el matching es por substring, así que las frases «grupo A1/A2» disparan la alerta aunque la convocatoria no sea TIC (si el título dice «Grupo A1»); los títulos que solo ponen «(A1)» entre paréntesis NO la disparan. ¿Quieres todos los A1/A2 sin excepción? Edita la alerta en el panel y añade las keywords «A1, A2».
+- **Plantillas de alerta en el panel**: tres accesos rápidos sobre el formulario «Alerta nueva» — *Informática · TIC (A1/A2)*, *Personal laboral* e *Ingeniería de obra* — que rellenan nombre, keywords y modo con un clic; editables antes de crear.
+- **GUI minimalista, sin marca**: cabecera y pie sin logo, sin nombre y sin versión en las dos páginas (panel y estado del servicio): solo un título sobrio («Empleo público»), la navegación de siempre y un pie de una línea («Sin telemetría · todo en local»). Ventanas, tarjetas, campos y formularios: exactamente como estaban.
 
 ## Novedades v2.3.11
 
@@ -173,7 +180,7 @@ El volumen es el mismo en el modo normal y en el reforzado, así que puedes alte
 
 La app solo inicia conexiones HTTPS (443) hacia los portales oficiales y Discord:
 
-`www.boe.es · www.bocm.es · www.juntadeandalucia.es · dogv.gva.es · portaldogc.gencat.cat · dogc.gencat.cat · bocyl.jcyl.es · doe.juntaex.es · www.caib.es · www.boa.aragon.es · www.gobiernodecanarias.org · www.euskadi.eus · www.xunta.gal · docm.jccm.es · miprincipado.asturias.es · sede.asturias.es · api.diba.cat · cido.diba.cat · eu-careers.europa.eu · discord.com · discordapp.com`
+`www.boe.es · www.bocm.es · www.juntadeandalucia.es · dogv.gva.es · portaldogc.gencat.cat · dogc.gencat.cat · bocyl.jcyl.es · doe.juntaex.es · www.caib.es · www.boa.aragon.es · www.gobiernodecanarias.org · www.euskadi.eus · www.xunta.gal · docm.jccm.es · miprincipado.asturias.es · sede.asturias.es · api.diba.cat · cido.diba.cat · eu-careers.europa.eu · selection.eu-careers.europa.eu · discord.com · discordapp.com`
 
 **Comprobación integrada**: en el panel → Sistema → «🔌 Comprobar conexión (firewall)» (o `GET /api/fuentes/verificar`) hace una sonda ligera por boletín (en lotes de 4, ~35 s) y te dice exactamente cuáles tienen salida de red desde tu servidor.
 
@@ -227,5 +234,6 @@ node scripts/prueba-fuentes.mjs 20261031    # ingesta real de los 16 boletines (
 - **v2.3.9**: el frontal deja de ser una tubería socat ciega y aplica el **mismo cortafuegos de entrada** que la app (módulo compartido `permitirEntrada`) a la IP real del visitante: una IP pública recibe el 403 en la puerta, antes de tocar la app; la app conserva su filtro como segunda capa (`LIMITE_FRONTAL=64m`).
 - **v2.3.10**: corregido el empaquetado del frontal de la v2.3.9 (con `build: ./frontal` los `COPY` fallaban siempre: «/frontal/frontal.mjs not found»; ahora `context: .` + `dockerfile: frontal/Dockerfile`) y `.dockerignore` en la raíz (contextos de build mínimos; el `.env` nunca sube al demonio).
 - **v2.3.11**: rendimiento del panel — esquema comprobado una vez por proceso (antes: ~27 DDL por petición), caché de 3 s en `/api/estado` (invalidada en escrituras), índice `IngestaLog(fuente, fechaBOE, createdAt)` para el estado por fuente, repintado del frontend solo si el estado cambió y sondeo en pausa con la pestaña oculta; registro de peticiones >800 ms.
+- **v2.3.12**: portal europeo (EPSO) arreglado — la plataforma se mudó a `selection.eu-careers.europa.eu` y el redirect moría en las listas blancas de app y proxy (ahora directo al dominio nuevo, ambos hosts permitidos); alerta precargada «Informática · TIC · Grupos A1/A2» + plantillas de un clic en el formulario de alertas; GUI minimalista sin marca en cabecera y pie.
 
 Datos de los boletines oficiales: reutilización permitida citando la fuente (ver licencia de cada uno en el panel). Código inspirado en [opoalerta/opoalerta](https://github.com/opoalerta/opoalerta).

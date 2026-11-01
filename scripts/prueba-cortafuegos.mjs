@@ -33,6 +33,7 @@ const permitidas = [
   "https://sede.asturias.es/bopa-descargas/algo.pdf",
   "https://cido.diba.cat/oposicion/1234",
   "https://eu-careers.europa.eu/es/job-opportunities",
+  "https://selection.eu-careers.europa.eu/es/job-opportunities/in-progress",
   "https://discord.com/api/v10/channels/123/messages",
   "https://discordapp.com/api/webhooks/123/abc",
 ];
