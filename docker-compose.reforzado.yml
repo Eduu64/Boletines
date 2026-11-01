@@ -1,5 +1,5 @@
 # ─────────────────────────────────────────────────────────────────────────────
-# OpoAlerta Docker v2.3.9 · MODO REFORZADO (proxy interno de salida)
+# OpoAlerta Docker v2.3.10 · MODO REFORZADO (proxy interno de salida)
 #
 #   docker compose -f docker-compose.reforzado.yml up -d --build
 #
@@ -38,7 +38,7 @@
 services:
   opoalerta:
     build: .
-    image: opoalerta-docker:2.3.9
+    image: opoalerta-docker:2.3.10
     container_name: opoalerta
     restart: unless-stopped
     # SIN «ports:»: Docker no puede publicar puertos de un contenedor que solo
@@ -103,7 +103,7 @@ services:
 
   proxy:
     build: ./proxy
-    image: opoalerta-proxy:2.3.9
+    image: opoalerta-proxy:2.3.10
     container_name: opoalerta-proxy
     restart: unless-stopped
     networks: [interna, salida]
@@ -121,15 +121,22 @@ services:
   frontal:
     # Puerta de ENTRADA al panel en el modo reforzado. Docker no publica
     # puertos de contenedores que solo están en redes internas (moby/moby#53256),
-    # así que este contenedor — frontal/frontal.mjs, ~40 líneas de Node —
+    # así que este contenedor — frontal/frontal.mjs, ~60 líneas de Node —
     # recibe el puerto publicado, comprueba la IP real del visitante con el
     # MISMO cortafuegos de entrada que la app (una IP pública recibe un 403
     # aquí, antes de tocar la app) y reenvía a opoalerta:3000. No ejecuta
     # código de la app, no guarda nada. Está en la red «salida» SOLO para que
     # Docker tenga dónde publicar el puerto; nunca conecta a nada que no sea
     # la app.
-    build: ./frontal
-    image: opoalerta-frontal:2.3.9
+    build:
+      # El contexto es la RAÍZ del proyecto, no ./frontal: el Dockerfile del
+      # frontal copia también servidor/cortafuegos.mjs (módulo compartido del
+      # cortafuegos de entrada). Con «build: ./frontal» el contexto era solo la
+      # carpeta frontal/ y esos COPY fallaban siempre («/frontal/frontal.mjs"
+      # not found»): bug de empaquetado de la v2.3.9, corregido en la v2.3.10.
+      context: .
+      dockerfile: frontal/Dockerfile
+    image: opoalerta-frontal:2.3.10
     container_name: opoalerta-frontal
     restart: unless-stopped
     ports:
