@@ -317,19 +317,51 @@ export async function ejecutarIngesta(opts = {}) {
   }
 }
 
+/** Ventana del relleno de días perdidos: BACKFILL_DIAS (7 por defecto).
+ * Tope 30 desde la v2.3.17 (antes 14): pide hasta 20 días de margen. Cada día
+ * ya cubierto se descarta con una consulta índexada, así que una ventana
+ * amplia no cuesta nada si no hay huecos. */
+export function diasBackfill() {
+  const n = parseInt(process.env.BACKFILL_DIAS ?? "", 10);
+  return Math.min(Math.max(Number.isFinite(n) ? n : 7, 0), 30); // 0 = desactivado (¡no puede caer al 7 por defecto!)
+}
+
 /** Al arrancar: ingesta de los días que no tengan log correcto (p. ej. si el
  * servidor estuvo apagado a la hora de la ingesta diaria). Se va de MÁS ANTIGUO
  * a más reciente: así el último registro de cada fuente es siempre el día más
  * nuevo y el panel de estado muestra la realidad de hoy. */
 export async function backfillArranque() {
   const zona = process.env.ZONA_HORARIA || "Europe/Madrid";
-  const dias = Math.min(Math.max(parseInt(process.env.BACKFILL_DIAS || "7", 10) || 7, 0), 14);
+  const dias = diasBackfill();
   for (let i = dias - 1; i >= 0; i--) {
     const fecha = new Intl.DateTimeFormat("en-CA", { timeZone: zona }).format(new Date(Date.now() - i * 86400000)).replace(/-/g, "");
     const yaOk = obtenerFila(`SELECT id FROM IngestaLog WHERE fechaBOE = ? AND estado = 'ok' LIMIT 1`, fecha);
     if (yaOk) continue;
     try {
       await ejecutarIngesta({ fecha, origen: i === 0 ? "arranque" : "reintento" });
+    } catch {
+      /* el log ya registra el error */
+    }
+    await new Promise((r) => setTimeout(r, 2000));
+  }
+}
+
+/** v2.3.17: relleno de huecos SIN hoy (hoy acaba de intentarse en la ingesta
+ * programada). Lo llama el planificador tras el ÚLTIMO horario del día: así,
+ * si un día falló la ingesta y el contenedor siguió en pie durante semanas,
+ * ese día se recupera al día siguiente sin necesidad de reiniciar. Mismas
+ * reglas que el de arranque: solo días sin log «ok», de más antiguo a más
+ * reciente, e idempotente (los anuncios ya guardados se saltan, así que no
+ * hay notificaciones repetidas a Discord). */
+export async function backfillDiario() {
+  const zona = process.env.ZONA_HORARIA || "Europe/Madrid";
+  const dias = diasBackfill();
+  for (let i = dias - 1; i >= 1; i--) {
+    const fecha = new Intl.DateTimeFormat("en-CA", { timeZone: zona }).format(new Date(Date.now() - i * 86400000)).replace(/-/g, "");
+    const yaOk = obtenerFila(`SELECT id FROM IngestaLog WHERE fechaBOE = ? AND estado = 'ok' LIMIT 1`, fecha);
+    if (yaOk) continue;
+    try {
+      await ejecutarIngesta({ fecha, origen: "reintento" });
     } catch {
       /* el log ya registra el error */
     }

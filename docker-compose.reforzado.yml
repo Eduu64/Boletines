@@ -1,5 +1,5 @@
 # ─────────────────────────────────────────────────────────────────────────────
-# OpoAlerta Docker v2.3.12 · MODO REFORZADO (proxy interno de salida)
+# OpoAlerta Docker v2.3.17 · MODO REFORZADO (proxy interno de salida)
 #
 #   docker compose -f docker-compose.reforzado.yml up -d --build
 #
@@ -38,7 +38,7 @@
 services:
   opoalerta:
     build: .
-    image: opoalerta-docker:2.3.12
+    image: opoalerta-docker:2.3.17
     container_name: opoalerta
     restart: unless-stopped
     # SIN «ports:»: Docker no puede publicar puertos de un contenedor que solo
@@ -53,6 +53,9 @@ services:
       ENABLE_SCHEDULER: ${ENABLE_SCHEDULER:-1}
       HORARIO_INGESTA: ${HORARIO_INGESTA:-0 9 * * *,35 11 * * *}
       ZONA_HORARIA: ${ZONA_HORARIA:-Europe/Madrid}
+      # Días hacia atrás que se reingestan si falta la ingesta (tope 30):
+      # al arrancar el contenedor y, desde la v2.3.17, también tras el último
+      # horario diario. Con 20 días de margen: BACKFILL_DIAS=20 en el .env
       BACKFILL_DIAS: ${BACKFILL_DIAS:-7}
       # Bot de Discord global (opcional: también configurable desde la web)
       DISCORD_BOT_TOKEN: ${DISCORD_BOT_TOKEN:-}
@@ -103,7 +106,7 @@ services:
 
   proxy:
     build: ./proxy
-    image: opoalerta-proxy:2.3.12
+    image: opoalerta-proxy:2.3.17
     container_name: opoalerta-proxy
     restart: unless-stopped
     networks: [interna, salida]
@@ -136,7 +139,7 @@ services:
       # not found»): bug de empaquetado de la v2.3.9, corregido en la v2.3.10.
       context: .
       dockerfile: frontal/Dockerfile
-    image: opoalerta-frontal:2.3.12
+    image: opoalerta-frontal:2.3.17
     container_name: opoalerta-frontal
     restart: unless-stopped
     ports:

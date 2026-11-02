@@ -1,4 +1,4 @@
-# OpoAlerta Docker v2.3.16
+# OpoAlerta Docker v2.3.17
 
 Alertas personales de **ofertas de empleo público** (oposiciones, personal laboral, bolsas): ingesta diaria del **BOE y de 15 boletines oficiales más**, panel web local y avisos automáticos a **Discord**.
 
@@ -19,6 +19,12 @@ node servidor/indice.mjs    # panel en http://localhost:3000
 ```
 
 ---
+
+## Novedades v2.3.17
+
+- **Proxy en bucle de reinicio arreglado** («Squid is already running: Found fresh instance pid file (/tmp/squid.pid) with pid 1»): la capa escribible del contenedor sobrevive al reinicio (solo se borra al recrerarlo), así que el pid file que el Squid anterior dejó en `/tmp` seguía ahí tras un reinicio del daemon o de la máquina; el Squid nuevo nace otra vez como pid 1, lee ese fichero, ve «un proceso vivo con ese pid» (él mismo) y muere — y Docker lo relanza en bucle infinito. Síntoma doble: `docker ps` con el proxy en `Restarting` todo el rato y **toda la salida de la app fallando** («Sin conexión con Discord: fetch failed» — las peticiones a Discord atraviesan ese proxy). Ahora un script de entrada (`proxy/entrada.sh`) borra los pid files residuales antes de arrancar; en este contenedor no puede haber otro Squid (el CMD es el único proceso), así que el borrado es siempre seguro y el healthcheck sigue funcionando. Arreglo inmediato sin actualizar: `docker compose -f docker-compose.reforzado.yml up -d --force-recreate proxy`.
+- **Relleno de días perdidos ampliado y diario**: la ventana de recuperación (`BACKFILL_DIAS`) estaba limitada a 14 días — ahora admite hasta **30** (con `BACKFILL_DIAS=20` en el `.env` ya tienes tus 20). Y ya no hace falta reiniciar el contenedor para recuperar un día fallido: tras el **último horario diario** de ingesta (por defecto las 11:35), el planificador comprueba los últimos N días y reingesta los que no tengan registro correcto (hoy no: acaba de intentarse). Igual que siempre: solo días sin ingesta «ok», de más antiguo a más reciente, idempotente y sin notificaciones duplicadas (los anuncios ya guardados se saltan).
+- Imágenes etiquetadas `2.3.17` en el compose (iban rezagadas en `2.3.12` desde la v2.3.13: al actualizar, las tres se recrean limpias).
 
 ## Novedades v2.3.16
 
@@ -214,7 +220,7 @@ La app solo inicia conexiones HTTPS (443) hacia los portales oficiales y Discord
 | `ENABLE_SCHEDULER` | `1` | Ingesta programada dentro del proceso |
 | `HORARIO_INGESTA` | `0 9 * * *,35 11 * * *` | Expresiones cron (admite varias y comas de campo) |
 | `ZONA_HORARIA` / `TZ` | `Europe/Madrid` | Zona horaria de los horarios |
-| `BACKFILL_DIAS` | `7` (0-14) | Días que se rellenan al arrancar si faltan |
+| `BACKFILL_DIAS` | `7` (0-30) | Días que se rellenan si falta la ingesta: al arrancar y, desde la v2.3.17, tras el último horario diario |
 | `DISCORD_BOT_TOKEN` / `DISCORD_CANAL_ID` | — | Bot global (también desde la web) |
 | `ADMIN_TOKEN` | — | Si se define, exige `x-admin-token` en toda escritura de la API y en la consola |
 | `LIMITE_MEMORIA` | `256m` | Techo del contenedor (la app ronda 50-80 MB) |

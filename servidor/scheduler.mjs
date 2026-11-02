@@ -5,7 +5,7 @@
 //   zona configurada (Europe/Madrid por defecto); no se ejecuta dos veces el
 //   mismo minuto aunque el tick se desvíe.
 
-import { ejecutarIngesta, backfillArranque } from "./ingesta.mjs";
+import { ejecutarIngesta, backfillArranque, backfillDiario } from "./ingesta.mjs";
 
 const CAMPO_VALIDO = /^[\d*\/,\-]+$/;
 
@@ -78,13 +78,26 @@ export function estadoScheduler() {
   );
 }
 
-async function lanzar(origen) {
+async function lanzarProgramado(esElUltimoHorario) {
   try {
-    const r = await ejecutarIngesta({ origen });
+    const r = await ejecutarIngesta({ origen: "programado" });
     const est = estadoScheduler();
-    est.ultimaEjecucion = { fecha: r.fechaBOE, origen, estado: r.estado, duracionMs: r.duracionMs, en: new Date().toISOString() };
+    est.ultimaEjecucion = { fecha: r.fechaBOE, origen: "programado", estado: r.estado, duracionMs: r.duracionMs, en: new Date().toISOString() };
   } catch {
     /* el log de ingesta ya guarda el error */
+  }
+  // v2.3.17: tras el ÚLTIMO horario del día, rellenar los días anteriores que
+  // se quedaron sin ingesta correcta (sin hoy: acaba de intentarse). Si un
+  // boletín cayó un martes y el contenedor siguió en pie, el martes se
+  // recupera sin esperar a un reinicio. Cualquier día sin hueco se descarta
+  // con una consulta: no cuesta nada cuando todo va bien.
+  if (esElUltimoHorario) {
+    await new Promise((r) => setTimeout(r, 5000));
+    try {
+      await backfillDiario();
+    } catch {
+      /* registrado en el log de ingesta */
+    }
   }
 }
 
@@ -101,9 +114,9 @@ export function iniciarScheduler() {
     const clave = `${ahora.hora}:${ahora.minuto}`;
     if (g.__opoCronMinuto === clave) return; // mismo minuto ya gestionado
     g.__opoCronMinuto = clave;
-    for (const h of horarios) {
-      if (coincideExpresion(h, ahora)) {
-        void lanzar("programado");
+    for (let i = 0; i < horarios.length; i++) {
+      if (coincideExpresion(horarios[i], ahora)) {
+        void lanzarProgramado(i === horarios.length - 1);
         break;
       }
     }

@@ -1,6 +1,6 @@
 {
   "name": "opoalerta-docker",
-  "version": "2.3.16",
+  "version": "2.3.17",
   "private": true,
   "description": "Alertas de ofertas de empleo público (BOE + 15 boletines) · Node puro, HTML+JS vanilla, SQLite de Node, cero dependencias npm",
   "type": "module",

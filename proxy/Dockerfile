@@ -9,6 +9,11 @@ RUN apk add --no-cache squid \
 
 COPY squid.conf dominios.list /etc/squid/
 
+# v2.3.17: el pid file residual del arranque anterior metía a Squid en un
+# bucle de reinicio («Squid is already running … pid file /tmp/squid.pid with
+# pid 1»). Este script lo borra antes de arrancar (ver proxy/entrada.sh).
+COPY entrada.sh /etc/squid/entrada.sh
+
 EXPOSE 3128
 USER squid
-CMD ["squid", "-N", "-f", "/etc/squid/squid.conf"]
+CMD ["sh", "/etc/squid/entrada.sh"]
