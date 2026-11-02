@@ -1,5 +1,5 @@
 # ─────────────────────────────────────────────────────────────────────────────
-# OpoAlerta Docker v2.3.12 · despliegue con un comando:
+# OpoAlerta Docker v2.3.18 · despliegue con un comando:
 #   cp .env.example .env   (opcional: ajusta valores)
 #   docker compose up -d --build
 # Panel web: http://IP-DEL-SERVIDOR:3000 — la app SOLO responde a tu red local
@@ -9,7 +9,7 @@
 services:
   opoalerta:
     build: .
-    image: opoalerta-docker:2.3.12
+    image: opoalerta-docker:2.3.18
     container_name: opoalerta
     restart: unless-stopped
     ports:

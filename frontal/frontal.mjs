@@ -49,18 +49,40 @@ const servidor = net.createServer((cliente) => {
     cliente.end(RECHAZO, () => cliente.destroy());
     return;
   }
-  // Tubería bidireccional: lo que llega del visitante va a la app y viceversa.
-  const app = net.connect(DESTINO.puerto, DESTINO.host);
-  cliente.pipe(app);
-  app.pipe(cliente);
-  const cerrar = () => {
-    cliente.destroy();
-    app.destroy();
-  };
-  cliente.on("error", cerrar);
-  app.on("error", cerrar);
-  cliente.on("close", () => app.destroy());
-  app.on("close", () => cliente.destroy());
+
+  // v2.3.18: mirar el PRIMER byte antes de tubear. Si es 0x16 es un handshake
+  // TLS — alguien llega con https:// o el navegador (sobre todo el móvil)
+  // «subió» la dirección a https por su cuenta. Este panel es HTTP: lo correcto
+  // es cortar AL INSTANTE. Antes, los bytes TLS cruzaban hasta la app, esta
+  // respondía un 400 en texto plano dentro del socket que el navegador espera
+  // cifrado, y Chrome lo reintentaba unas cuantas veces hasta rendirse con
+  // «ERR_TOO_MANY_RETRIES / es posible que esté inactiva o trasladada». Con el
+  // cierre inmediato, el intento https falla limpio y en un segundo: Chrome
+  // rebota a http:// por su cuenta (o al menos el error ya no es un bucle).
+  cliente.pause();
+  cliente.once("readable", () => {
+    const primero = cliente.read();
+    if (primero && primero.length > 0 && primero[0] === 0x16) {
+      console.log(new Date().toISOString(), `conexión TLS cerrada (${ip}): el panel es http:// — el navegador estaba intentando https://`);
+      cliente.destroy();
+      return;
+    }
+    // HTTP (o cualquier otra cosa): adelante. El primer trozo ya se ha
+    // consumido para espiarlo — se reenvía a mano y la tubería sigue con el resto.
+    const app = net.connect(DESTINO.puerto, DESTINO.host);
+    if (primero && primero.length > 0) app.write(primero);
+    cliente.pipe(app);
+    app.pipe(cliente);
+    const cerrar = () => {
+      cliente.destroy();
+      app.destroy();
+    };
+    cliente.on("error", cerrar);
+    app.on("error", cerrar);
+    cliente.on("close", () => app.destroy());
+    app.on("close", () => cliente.destroy());
+    cliente.resume();
+  });
 });
 
 servidor.listen(PUERTO, HOST, () => {

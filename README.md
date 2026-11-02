@@ -1,4 +1,4 @@
-# OpoAlerta Docker v2.3.17
+# OpoAlerta Docker v2.3.18
 
 Alertas personales de **ofertas de empleo público** (oposiciones, personal laboral, bolsas): ingesta diaria del **BOE y de 15 boletines oficiales más**, panel web local y avisos automáticos a **Discord**.
 
@@ -19,6 +19,11 @@ node servidor/indice.mjs    # panel en http://localhost:3000
 ```
 
 ---
+
+## Novedades v2.3.18
+
+- **Intentos HTTPS del móvil cortados al instante en el frontal**: si el navegador (típico en móvil) pedía `https://…` — por la dirección tecleada a mano o porque Chrome «sube» http a https por su cuenta — los bytes TLS llegaban hasta la app, que respondía un 400 en texto dentro de un socket que el navegador espera cifrado; Chrome lo reintentaba unas cuantas veces y se rendía con **«ERR_TOO_MANY_RETRIES / es posible que esté inactiva o trasladada»**, aunque desde el PC se viera perfecto. Ahora el frontal espía el primer byte y, si es un handshake TLS (0x16), cierra la conexión al instante y sin responder: el intento https falla limpio, Chrome rebota a `http://` por su cuenta y el panel carga. El panel es y sigue siendo **solo HTTP dentro de tu LAN** (el cifrado lo aportaría un proxy inverso con certificado, fuera del alcance de este proyecto). Nueva prueba `scripts/prueba-frontal.mjs`: HTTP pasa, TLS se corta sin respuesta, el frontal sigue sirviendo y dos clientes concurrentes entran a la vez.
+- **Multi-dispositivo confirmado**: el panel es un servidor web de tu LAN — PC, portátil, tablet y móvil a la vez, sin límite ni sesión. Cualquier navegador de tu red entra en `http://IP-DEL-SERVIDOR:3000`; desde fuera (datos móviles/internet) recibe un 403 por diseño.
 
 ## Novedades v2.3.17
 
