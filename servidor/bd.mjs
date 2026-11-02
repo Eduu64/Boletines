@@ -56,6 +56,7 @@ const DDL = [
     "soloConvocatorias" BOOLEAN NOT NULL DEFAULT true,
     "webhook" TEXT,
     "canalId" TEXT,
+    "boletines" TEXT,
     "activa" BOOLEAN NOT NULL DEFAULT true,
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
   )`,
@@ -122,6 +123,11 @@ export function asegurarEsquema() {
   }
   if (!columnasDe("Ajustes").has("fuentesactivas")) {
     bd.exec(`ALTER TABLE "Ajustes" ADD COLUMN "fuentesActivas" TEXT`);
+  }
+  // v2.3.19: boletines que vigila cada alerta (JSON de ids de fuente;
+  // NULL/vacío = todos los boletines activos, comportamiento anterior).
+  if (!columnasDe("Alerta").has("boletines")) {
+    bd.exec(`ALTER TABLE "Alerta" ADD COLUMN "boletines" TEXT`);
   }
 }
 

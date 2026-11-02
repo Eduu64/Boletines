@@ -136,7 +136,7 @@
     <section class="seccion oculto" id="alertas" role="tabpanel" aria-labelledby="tab-alertas">
       <div class="cuadricula-2">
         <div class="tarjeta">
-          <div class="cabecera"><h2>🔔 Tus alertas</h2><p class="descripcion">Cada alerta cruza los anuncios nuevos de todos los boletines y avisa a Discord</p></div>
+          <div class="cabecera"><h2>🔔 Tus alertas</h2><p class="descripcion">Cada alerta cruza los anuncios nuevos de los boletines que elijas (o de todos) y avisa a Discord</p></div>
           <div class="cuerpo" id="lista-alertas"><p class="cargando">Cargando…</p></div>
         </div>
         <div class="tarjeta">
@@ -166,6 +166,11 @@
                 </div>
               </div>
               <div class="campo"><label for="a-organismo">Organismo (opcional)</label><input id="a-organismo" placeholder="p. ej. Ayuntamiento de Madrid" /></div>
+              <div class="campo">
+                <label>Boletines a vigilar</label>
+                <div class="cuadricula-boletines" id="a-boletines"></div>
+                <p class="ayuda">Sin marcar ninguno = todos los boletines activos. Marca solo los que te interesen (p. ej. BOCM para personal laboral de Madrid, junto a las palabras clave «personal laboral»).</p>
+              </div>
               <div class="interruptor"><label for="a-solo">Solo convocatorias (descarta listas y correcciones)</label><input type="checkbox" id="a-solo" checked /></div>
               <div class="campo"><label for="a-webhook">Webhook de Discord (opcional, para esta alerta)</label><input id="a-webhook" placeholder="https://discord.com/api/webhooks/…" /><p class="ayuda">Si lo dejas vacío se usa el bot global de Sistema.</p></div>
               <div class="campo"><label for="a-canal">ID de canal de Discord (opcional)</label><input id="a-canal" placeholder="1134567890123456789" /></div>
@@ -309,6 +314,11 @@
         </div>
       </div>
       <div class="campo"><label for="e-organismo">Organismo</label><input id="e-organismo" /></div>
+      <div class="campo">
+        <label>Boletines a vigilar</label>
+        <div class="cuadricula-boletines" id="e-boletines"></div>
+        <p class="ayuda">Sin marcar ninguno = todos los boletines activos.</p>
+      </div>
       <div class="interruptor"><label for="e-solo">Solo convocatorias</label><input type="checkbox" id="e-solo" /></div>
       <div class="campo"><label for="e-webhook">Webhook de Discord</label><input id="e-webhook" /></div>
       <div class="campo"><label for="e-canal">ID de canal</label><input id="e-canal" /></div>

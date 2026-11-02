@@ -4,7 +4,9 @@
 
 "use strict";
 
-const $ = (id) => document.getElementById(id);
+// Acepta tanto "mi-id" como "#mi-id" (getElementById no admite el prefijo #;
+// v2.3.19 lo normaliza porque el selector de boletines lo usaba con #).
+const $ = (id) => document.getElementById(String(id).replace(/^#/, ""));
 
 function escapar(texto) {
   const div = document.createElement("div");
@@ -392,6 +394,41 @@ $("pag-siguiente").addEventListener("click", () => { paginaConvs++; cargarConvoc
 
 let cacheAlertas = [];
 
+// v2.3.19: boletines seleccionables por alerta (mismos ids que servidor/fuentes).
+const BOLETINES = [
+  ["boe", "BOE · Estatal"],
+  ["bocm", "BOCM · Madrid"],
+  ["boja", "BOJA · Andalucía"],
+  ["dogv", "DOGV · C. Valenciana"],
+  ["dogc", "DOGC · Cataluña"],
+  ["bocyl", "BOCYL · Castilla y León"],
+  ["doe", "DOE · Extremadura"],
+  ["boib", "BOIB · Baleares"],
+  ["boa", "BOA · Aragón"],
+  ["boc", "BOC · Canarias"],
+  ["bopv", "BOPV · País Vasco"],
+  ["dog", "DOG · Galicia"],
+  ["docm", "DOCM · C-La Mancha"],
+  ["bopa", "BOPA · Asturias"],
+  ["cido", "CIDO · Dip. Barcelona"],
+  ["epso", "EPSO · UE"],
+];
+const nombreBoletin = (id) => BOLETINES.find(([i]) => i === id)?.[1] ?? id;
+
+function pintarBoletines(caja) {
+  $(caja).innerHTML = BOLETINES.map(
+    ([id, nombre]) => `<label class="check-boletin"><input type="checkbox" value="${id}" /> ${nombre}</label>`
+  ).join("");
+}
+pintarBoletines("#a-boletines");
+pintarBoletines("#e-boletines");
+
+const boletinesMarcados = (caja) => [...$(caja).querySelectorAll("input:checked")].map((x) => x.value);
+function marcarBoletines(caja, lista) {
+  const marcados = new Set(Array.isArray(lista) ? lista : []);
+  $(caja).querySelectorAll("input").forEach((x) => (x.checked = marcados.has(x.value)));
+}
+
 async function cargarAlertas() {
   try {
     const datos = await api("/api/alertas");
@@ -413,6 +450,7 @@ async function cargarAlertas() {
           · modo ${escapar(a.modoKeywords)}
           ${a.organismo ? ` · 🏛 ${escapar(a.organismo)}` : ""}
           · ámbito ${escapar(a.ambito)}
+          · 📰 ${a.boletines?.length ? a.boletines.map((b) => escapar(nombreBoletin(b))).join(", ") : "todos los boletines"}
           ${a.soloConvocatorias ? " · solo convocatorias" : " · cualquier comunicación"}
           ${a.webhook ? " · webhook propio" : ""}
           ${a.canalId ? ` · canal ${escapar(a.canalId)}` : ""}
@@ -474,6 +512,7 @@ $("lista-alertas").addEventListener("click", async (ev) => {
     $("e-modo").value = a.modoKeywords;
     $("e-ambito").value = a.ambito;
     $("e-organismo").value = a.organismo ?? "";
+    marcarBoletines("#e-boletines", a.boletines);
     $("e-solo").checked = a.soloConvocatorias !== false;
     $("e-webhook").value = a.webhook ?? "";
     $("e-canal").value = a.canalId ?? "";
@@ -501,6 +540,7 @@ $("form-alerta").addEventListener("submit", async (ev) => {
     organismo: $("a-organismo").value || null,
     ambito: $("a-ambito").value,
     soloConvocatorias: $("a-solo").checked,
+    boletines: boletinesMarcados("#a-boletines"),
     webhook: $("a-webhook").value || null,
     canalId: $("a-canal").value || null,
   };
@@ -509,6 +549,7 @@ $("form-alerta").addEventListener("submit", async (ev) => {
     aviso("Alerta creada", "Se aplicará en la próxima ingesta");
     ev.target.reset();
     $("a-solo").checked = true;
+    marcarBoletines("#a-boletines", []);
     await cargarAlertas();
     await recargarEstado();
   } catch (e) {
@@ -553,6 +594,7 @@ $("e-guardar").addEventListener("click", async (ev) => {
     ambito: $("e-ambito").value,
     organismo: $("e-organismo").value || null,
     soloConvocatorias: $("e-solo").checked,
+    boletines: boletinesMarcados("#e-boletines"),
     webhook: $("e-webhook").value || null,
     canalId: $("e-canal").value || null,
   };

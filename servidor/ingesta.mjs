@@ -7,7 +7,7 @@ import { obtenerFila, todas, ejecutar, nuevoId, fechaPublicacionIso, hoyIsoUtc, 
 import { consultarFuentes, normalizarFuentesActivas } from "./fuentes/index.mjs";
 import { obtenerAmbitoBOE, boeDirectoOk } from "./fuentes/boe.mjs";
 import { clasificarTipo, mapearAmbito } from "./normalizar.mjs";
-import { itemCoincide } from "./matching.mjs";
+import { itemCoincide, boletinesDe } from "./matching.mjs";
 import { construirPayload, enviarBot, enviarWebhook, payloadPrueba } from "./discord.mjs";
 import { itemsDemo, ambitoDemo } from "./demo.mjs";
 
@@ -238,7 +238,13 @@ export async function ejecutarIngesta(opts = {}) {
     resumen.itemsNuevos = nuevos.length;
 
     // 4) Cruzar con alertas activas y notificar a Discord
-    const alertas = todas(`SELECT * FROM Alerta WHERE activa = 1`).map((a) => ({ ...a, soloConvocatorias: a.soloConvocatorias !== 0 }));
+    //    boletinesDe convierte el JSON de la columna a array UNA vez por alerta
+    //    (itemCoincide lo usa tal cual: array → ruta rápida sin re-parsear).
+    const alertas = todas(`SELECT * FROM Alerta WHERE activa = 1`).map((a) => ({
+      ...a,
+      soloConvocatorias: a.soloConvocatorias !== 0,
+      boletines: boletinesDe(a),
+    }));
     let notificados = 0;
     let disparadas = 0;
     const notificadosPorFuente = {};

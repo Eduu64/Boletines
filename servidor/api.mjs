@@ -23,15 +23,19 @@ import { leerConsola, limpiarConsola } from "./consola.mjs";
 import { enviarBot, payloadPrueba, validarWebhook } from "./discord.mjs";
 import { FUENTES, IDS_FUENTES, verificarFuentes } from "./fuentes/index.mjs";
 import { TEMATICAS, tematicaPorId, itemEnTematica } from "./tematicas.mjs";
-import { itemCoincide } from "./matching.mjs";
+import { itemCoincide, boletinesDe } from "./matching.mjs";
 import { permitirEntrada, cortafuegosActivo, cortafuegosEntradaActivo } from "./cortafuegos.mjs";
 import { fechaBonita } from "./normalizar.mjs";
 
-const VERSION = "2.3.18";
+const VERSION = "2.3.20";
 const RAIZ_PUBLICO = join(fileURLToPath(new URL(".", import.meta.url)), "..", "publico");
 const TAM_PAGINA = 20;
 const MAX_CUERPO = 256 * 1024;
 const AMBITOS = ["todos", "estatal", "autonomica", "provincial", "local"];
+// v2.3.19: ids válidos para el selector de boletines de las alertas. Además de
+// las 16 fuentes reales se acepta «demo» (los datos de demostración se guardan
+// con esa fuente: sin ella, una alerta limitada no vería nada en modo demo).
+const IDS_BOLETINES_VALIDOS = [...IDS_FUENTES, "demo"];
 
 const TIPOS = {
   ".html": "text/html; charset=utf-8",
@@ -383,7 +387,20 @@ function validarCuerpoAlerta(c) {
   const canalId = c.canalId ? String(c.canalId).replace(/\D/g, "") : null;
   if (webhook && !validarWebhook(webhook)) errores.push("El webhook debe tener el formato https://discord.com/api/webhooks/…");
   if (canalId && !/^\d{5,25}$/.test(canalId)) errores.push("El ID de canal no parece válido");
-  return { nombre, keywords, modoKeywords, organismo, ambito, soloConvocatorias, activa, webhook, canalId, errores };
+  // v2.3.19: boletines que vigila la alerta. [] o ausente = todos (como antes).
+  // Se deduplican, se limpian y se validan contra el registro de fuentes.
+  let boletines = null;
+  if (c.boletines !== undefined && c.boletines !== null) {
+    if (!Array.isArray(c.boletines)) {
+      errores.push("boletines debe ser una lista de ids de boletín (p. ej. [\"bocm\",\"boe\"])");
+    } else {
+      const lista = [...new Set(c.boletines.map((x) => String(x).trim().toLowerCase()).filter(Boolean))];
+      const invalidos = lista.filter((x) => !IDS_BOLETINES_VALIDOS.includes(x));
+      if (invalidos.length > 0) errores.push(`Boletín desconocido: ${invalidos.join(", ")}`);
+      else if (lista.length > 0) boletines = JSON.stringify(lista);
+    }
+  }
+  return { nombre, keywords, modoKeywords, organismo, ambito, soloConvocatorias, activa, webhook, canalId, boletines, errores };
 }
 
 async function apiAlertas(req, res) {
@@ -393,6 +410,7 @@ async function apiAlertas(req, res) {
       const normalizada = normalizarBooleanos(a);
       return {
         ...normalizada,
+        boletines: boletinesDe(normalizada), // v2.3.19: JSON de la BD → array
         stats: {
           totalNotificaciones: obtenerFila(`SELECT COUNT(*) AS n FROM Notificacion WHERE alertaId = ?`, a.id).n,
           ok7dias: obtenerFila(`SELECT COUNT(*) AS n FROM Notificacion WHERE alertaId = ? AND estado = 'ok' AND enviadoAt >= ?`, a.id, hace7dias).n,
@@ -418,7 +436,7 @@ async function apiAlertas(req, res) {
   }
   const id = nuevoId();
   ejecutar(
-    `INSERT INTO Alerta (id, nombre, keywords, modoKeywords, organismo, ambito, soloConvocatorias, activa, webhook, canalId) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO Alerta (id, nombre, keywords, modoKeywords, organismo, ambito, soloConvocatorias, activa, webhook, canalId, boletines) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     id,
     datos.nombre,
     datos.keywords,
@@ -428,9 +446,11 @@ async function apiAlertas(req, res) {
     datos.soloConvocatorias ? 1 : 0,
     datos.activa ? 1 : 0,
     datos.webhook,
-    datos.canalId
+    datos.canalId,
+    datos.boletines
   );
-  json(res, 201, { alerta: normalizarBooleanos(obtenerFila(`SELECT * FROM Alerta WHERE id = ?`, id)) });
+  const creada = normalizarBooleanos(obtenerFila(`SELECT * FROM Alerta WHERE id = ?`, id));
+  json(res, 201, { alerta: { ...creada, boletines: boletinesDe(creada) } });
 }
 
 async function apiAlertaId(req, res, url, id) {
@@ -484,11 +504,26 @@ async function apiAlertaId(req, res, url, id) {
       }
       datos.canalId = canalId;
     }
+    if (c.boletines !== undefined) {
+      // v2.3.19: misma validación que en POST; [] vuelve a «todos los boletines»
+      if (!Array.isArray(c.boletines)) {
+        json(res, 400, { error: 'boletines debe ser una lista de ids de boletín (p. ej. ["bocm","boe"])' });
+        return;
+      }
+      const lista = [...new Set(c.boletines.map((x) => String(x).trim().toLowerCase()).filter(Boolean))];
+      const invalidos = lista.filter((x) => !IDS_BOLETINES_VALIDOS.includes(x));
+      if (invalidos.length > 0) {
+        json(res, 400, { error: `Boletín desconocido: ${invalidos.join(", ")}` });
+        return;
+      }
+      datos.boletines = lista.length > 0 ? JSON.stringify(lista) : null;
+    }
     const asignaciones = Object.keys(datos).map((k) => `${k} = ?`);
     if (asignaciones.length > 0) {
       ejecutar(`UPDATE Alerta SET ${asignaciones.join(", ")} WHERE id = ?`, ...Object.values(datos), id);
     }
-    json(res, 200, { alerta: normalizarBooleanos(obtenerFila(`SELECT * FROM Alerta WHERE id = ?`, id)) });
+    const actualizada = normalizarBooleanos(obtenerFila(`SELECT * FROM Alerta WHERE id = ?`, id));
+    json(res, 200, { alerta: { ...actualizada, boletines: boletinesDe(actualizada) } });
     return;
   }
   json(res, 405, { error: "Método no permitido" });
@@ -507,7 +542,10 @@ async function apiAlertaProbar(req, res, id) {
     desde
   );
   const coincidentes = guardadas.filter((g) =>
-    itemCoincide({ ...alerta, soloConvocatorias: alerta.soloConvocatorias !== 0 }, { titulo: g.titulo, departamento: g.departamento, tipo: g.tipo, tipoAmbito: g.ambito ?? undefined })
+    itemCoincide(
+      { ...alerta, soloConvocatorias: alerta.soloConvocatorias !== 0, boletines: boletinesDe(alerta) },
+      { titulo: g.titulo, departamento: g.departamento, tipo: g.tipo, tipoAmbito: g.ambito ?? undefined, fuente: g.fuente }
+    )
   );
   json(res, 200, {
     envio,

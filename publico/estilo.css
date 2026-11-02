@@ -229,6 +229,17 @@ label { font-size: 0.84rem; font-weight: 600; display: block; margin-bottom: 4px
 .cuadricula-campos { display: grid; grid-template-columns: 1fr; gap: 0 14px; }
 @media (min-width: 560px) { .cuadricula-campos { grid-template-columns: 1fr 1fr; } }
 
+/* v2.3.19: selector de boletines por alerta (cuadrícula de casillas) */
+.cuadricula-boletines {
+  display: grid; grid-template-columns: 1fr; gap: 7px 16px;
+  border: 1px solid var(--borde); border-radius: 10px; padding: 11px 13px;
+  background: #fcfcfd; margin-bottom: 8px;
+}
+@media (min-width: 560px) { .cuadricula-boletines { grid-template-columns: 1fr 1fr; } }
+@media (min-width: 920px) { .cuadricula-boletines { grid-template-columns: 1fr 1fr 1fr; } }
+.check-boletin { display: flex; align-items: center; gap: 8px; margin: 0; font-weight: 400; font-size: 0.86rem; color: var(--tinta); cursor: pointer; }
+.check-boletin input { width: 16px; height: 16px; accent-color: var(--verde); flex-shrink: 0; margin: 0; }
+
 .interruptor {
   display: flex; align-items: center; justify-content: space-between;
   border: 1px solid var(--borde); border-radius: 10px; padding: 11px 13px;

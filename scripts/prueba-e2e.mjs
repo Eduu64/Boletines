@@ -179,6 +179,74 @@ async function main() {
   ok("probar alerta personal laboral envía a Discord", proba.data?.envio?.ok === true, proba.data?.envio?.detalle);
   ok("vista previa 7 días de personal laboral con coincidencias", (proba.data?.coincidencias7dias?.total ?? 0) >= 2, `total=${proba.data?.coincidencias7dias?.total}`);
 
+  // 9b) v2.3.19: selector de boletines por alerta (validación API + filtro real)
+  const alBocm = await json("/api/alertas", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ nombre: "Solo BOCM (verificación)", keywords: "personal laboral", boletines: ["bocm"], webhook: "http://127.0.0.1:3999/captura" }),
+  });
+  ok("crea alerta limitada a BOCM", alBocm.status === 201, JSON.stringify(alBocm.data ?? {}));
+  const alBocmId = alBocm.data?.alerta?.id;
+  const alBocmGet = await json("/api/alertas");
+  const filaBocm = (alBocmGet.data?.alertas ?? []).find((x) => x.id === alBocmId);
+  ok("GET devuelve boletines como array", JSON.stringify(filaBocm?.boletines) === '["bocm"]', JSON.stringify(filaBocm?.boletines));
+
+  const alDos = await json("/api/alertas", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ nombre: "BOCM+BOE (verificación)", keywords: "personal laboral", boletines: ["demo", "bocm"] }),
+  });
+  ok("crea alerta con dos boletines", alDos.status === 201);
+
+  const alVacia = await json("/api/alertas", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ nombre: "Todos (verificación)", keywords: "personal laboral", boletines: [] }),
+  });
+  ok("boletines [] = todos (respuesta como array vacío)", alVacia.status === 201 && JSON.stringify(alVacia.data?.alerta?.boletines) === "[]", JSON.stringify(alVacia.data?.alerta?.boletines));
+
+  const alMala = await json("/api/alertas", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ nombre: "Inválida", boletines: ["noexiste"] }),
+  });
+  ok("rechaza id de boletín desconocido", alMala.status === 400 && /desconocido/i.test(alMala.data?.error ?? ""), alMala.data?.error);
+  const alMala2 = await json("/api/alertas", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ nombre: "Inválida 2", boletines: "bocm" }),
+  });
+  ok("rechaza boletines que no es lista", alMala2.status === 400, alMala2.data?.error);
+
+  const patchBoletines = await json(`/api/alertas/${alBocmId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ boletines: ["demo"] }),
+  });
+  ok("PATCH cambia los boletines de la alerta", patchBoletines.status === 200 && JSON.stringify(patchBoletines.data?.alerta?.boletines) === '["demo"]', JSON.stringify(patchBoletines.data?.alerta?.boletines));
+  const patchVacio = await json(`/api/alertas/${alBocmId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ boletines: [] }),
+  });
+  ok("PATCH [] vuelve a todos los boletines", patchVacio.status === 200 && JSON.stringify(patchVacio.data?.alerta?.boletines) === "[]", JSON.stringify(patchVacio.data?.alerta?.boletines));
+  await json(`/api/alertas/${alBocmId}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ boletines: ["bocm"] }) });
+
+  // el filtro actúa de verdad en la vista previa: los anuncios demo son fuente «demo»
+  const probaBocm = await json(`/api/alertas/${alBocmId}/probar`, { method: "POST" });
+  ok(
+    "probar respeta el filtro: BOCM → 0 coincidencias en BD demo",
+    probaBocm.data?.envio?.ok === true && probaBocm.data?.coincidencias7dias?.total === 0,
+    `total=${probaBocm.data?.coincidencias7dias?.total}`
+  );
+  await json(`/api/alertas/${alBocmId}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ boletines: ["demo"] }) });
+  const probaDemo = await json(`/api/alertas/${alBocmId}/probar`, { method: "POST" });
+  ok(
+    "probar respeta el filtro: demo → ve las plazas de personal laboral",
+    (probaDemo.data?.coincidencias7dias?.total ?? 0) >= 2,
+    `total=${probaDemo.data?.coincidencias7dias?.total}`
+  );
+
   // 10) webhooks capturados por el mock: ¿llegaron los avisos?
   const res = await fetch("http://127.0.0.1:3999/capturas");
   const capturas = (await res.json()) ?? [];
@@ -208,7 +276,7 @@ async function main() {
   ok("estado: 20 convocatorias guardadas", est.data?.stats?.totalConvocatorias === 20, `total=${est.data?.stats?.totalConvocatorias}`);
   ok("estado: notificaciones OK >= 9", (est.data?.stats?.notificacionesOk ?? 0) >= 9, `ok=${est.data?.stats?.notificacionesOk}`);
   ok("estado: 16 boletines en el registro de fuentes", (est.data?.fuentes ?? []).length === 16, `fuentes=${(est.data?.fuentes ?? []).length}`);
-  ok("estado: versión 2.3.18", est.data?.version === "2.3.18", `version=${est.data?.version}`);
+  ok("estado: versión 2.3.20", est.data?.version === "2.3.20", `version=${est.data?.version}`);
 }
 
 main().catch((e) => {

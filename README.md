@@ -1,4 +1,4 @@
-# OpoAlerta Docker v2.3.18
+# OpoAlerta Docker v2.3.20
 
 Alertas personales de **ofertas de empleo público** (oposiciones, personal laboral, bolsas): ingesta diaria del **BOE y de 15 boletines oficiales más**, panel web local y avisos automáticos a **Discord**.
 
@@ -19,6 +19,14 @@ node servidor/indice.mjs    # panel en http://localhost:3000
 ```
 
 ---
+
+## Novedades v2.3.20
+
+- **Arreglado: el panel se quedaba en «Cargando…» para siempre** (defecto de la v2.3.19 empaquetada): el código nuevo del selector de boletines llamaba al helper del panel con `$("#a-boletines")` (estilo CSS), pero `getElementById` no admite el prefijo `#` — devolvía `null`, la carga de `app.js` moría en ese punto y **nada de lo posterior se ejecutaba**: KPIs a cero con puntos suspensivos, «Estado de los boletines» en «Cargando…», pestañas muertas (Alertas/Convocatorias/Sistema sin pintar datos). Ahora el helper acepta ambas formas (`"a-boletines"` y `"#a-boletines"`), el panel carga entero y todo el flujo de alertas multi-boletín está verificado de punta a punta con navegador real (crear → editar → probar → pausar → reactivar → borrar, escritorio y móvil). Detectado en la revisión completa de GUI/responsive pedida para esta versión.
+
+## Novedades v2.3.19
+
+- **Boletines seleccionables por alerta**: el formulario «Alerta nueva» (y el diálogo «Editar») añade una cuadrícula de casillas con los 16 boletines — si solo te interesa el personal laboral de Madrid, marcas **BOCM · Madrid**, escribes «personal laboral» como palabra clave y esa alerta ignora todo lo demás. Sin marcar ninguna casilla la alerta vigila **todos** los boletines activos, exactamente como hasta ahora (tus alertas existentes no cambian: la columna nueva nace vacía y la migración es automática al arrancar). La tarjeta de cada alerta muestra la selección («📰 BOCM · Madrid» o «📰 todos los boletines»), la API valida los ids contra el registro de fuentes (`boletines: ["bocm","boe"]`, un id desconocido → 400) y la vista previa «Probar» también respeta el filtro. Nueva prueba `scripts/prueba-boletines-alerta.mjs` (motor real de matching, 21 aserciones) + 12 aserciones E2E nuevas en la batería.
 
 ## Novedades v2.3.18
 
@@ -240,6 +248,7 @@ La app solo inicia conexiones HTTPS (443) hacia los portales oficiales y Discord
 node scripts/prueba-completa.mjs            # batería completa (recomendado; limpia su BD sola)
 node scripts/prueba-fixtures.mjs            # 16 parsers con fixtures reales del proyecto original
 node scripts/test-matching-e2e.js           # matching offline (personal laboral incluido)
+node scripts/prueba-boletines-alerta.mjs    # selector de boletines por alerta (matching real, sin servidor)
 node scripts/prueba-cortafuegos.mjs         # cortafuegos de salida e entrada (lista blanca, interruptores y frontal con su 403)
 node scripts/prueba-proxy.sh                # modo reforzado con proxy interno (requiere Docker y el stack en marcha; diagnostica si no lo está)
 node scripts/prueba-fallback.mjs            # cuádruple respaldo del BOE (con scripts/boe-falso.mjs)
@@ -270,5 +279,9 @@ node scripts/prueba-fuentes.mjs 20261031    # ingesta real de los 16 boletines (
 - **v2.3.14**: reintentos de la v2.3.13 retirados a petición (la ingesta vuelve al comportamiento de la v2.3.12); el resto de la v2.3.13 se conserva intacto.
 - **v2.3.15**: filtro de temática en la búsqueda (10 temáticas, substring sin acentos sobre título+organismo, keywords cortas por palabra completa; endpoint `GET /api/tematicas`); diagnóstico del 401 del bot — detección del Client Secret antes de llamar a Discord y mensajes con la vía exacta del token.
 - **v2.3.16**: buscador con rejilla fija (fin de las filas huérfanas tipo «Hasta» a todo lo ancho; Buscar+Temática arriba, resto abajo; tablet en 2 columnas, móvil apilado) y estáticos con `no-cache` (el navegador ya no pinta la interfaz vieja tras actualizar).
+- **v2.3.17**: proxy en bucle de reinicio arreglado (pid file residual de Squid en `/tmp`; «Sin conexión con Discord: fetch failed» incluido) con `proxy/entrada.sh`, y relleno de días perdidos ampliado (hasta 30 días) y diario automático tras el último horario, sin reiniciar.
+- **v2.3.18**: el frontal corta al instante los intentos https del móvil (primer byte TLS = cierre limpio; adiós al «ERR_TOO_MANY_RETRIES / inactiva o trasladada» cuando Chrome sube http a https por su cuenta) y multi-dispositivo confirmado por diseño.
+- **v2.3.19**: boletines seleccionables por alerta (cuadrícula de los 16 en «Alerta nueva» y «Editar»; vacío = todos, retrocompatible; API con validación de ids y «Probar» respetando el filtro).
+- **v2.3.20**: arreglo crítico del panel de la v2.3.19 («Cargando…» eterno por un `$("#a-boletines")` con `#` que `getElementById` no entiende; el helper ahora acepta ambos) + verificación completa de GUI, responsive y funcionamiento con navegador real.
 
 Datos de los boletines oficiales: reutilización permitida citando la fuente (ver licencia de cada uno en el panel). Código inspirado en [opoalerta/opoalerta](https://github.com/opoalerta/opoalerta).

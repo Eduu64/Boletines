@@ -1,5 +1,5 @@
 # ─────────────────────────────────────────────────────────────────────────────
-# OpoAlerta Docker v2.3.18 · MODO REFORZADO (proxy interno de salida)
+# OpoAlerta Docker v2.3.20 · MODO REFORZADO (proxy interno de salida)
 #
 #   docker compose -f docker-compose.reforzado.yml up -d --build
 #
@@ -38,7 +38,7 @@
 services:
   opoalerta:
     build: .
-    image: opoalerta-docker:2.3.18
+    image: opoalerta-docker:2.3.20
     container_name: opoalerta
     restart: unless-stopped
     # SIN «ports:»: Docker no puede publicar puertos de un contenedor que solo
@@ -106,7 +106,7 @@ services:
 
   proxy:
     build: ./proxy
-    image: opoalerta-proxy:2.3.18
+    image: opoalerta-proxy:2.3.20
     container_name: opoalerta-proxy
     restart: unless-stopped
     networks: [interna, salida]
@@ -139,7 +139,7 @@ services:
       # not found»): bug de empaquetado de la v2.3.9, corregido en la v2.3.10.
       context: .
       dockerfile: frontal/Dockerfile
-    image: opoalerta-frontal:2.3.18
+    image: opoalerta-frontal:2.3.20
     container_name: opoalerta-frontal
     restart: unless-stopped
     ports:

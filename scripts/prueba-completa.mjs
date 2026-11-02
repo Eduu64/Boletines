@@ -53,6 +53,7 @@ async function main() {
   // 1 y 2: sin servidor
   await paso("Fixtures: 16 parsers con datos reales", "node", ["scripts/prueba-fixtures.mjs"]);
   await paso("Matching offline (personal laboral incluido)", "node", ["scripts/test-matching-e2e.js"]);
+  await paso("Selector de boletines por alerta (v2.3.19)", "node", ["scripts/prueba-boletines-alerta.mjs"]);
   await paso("Cortafuegos de salida (lista blanca)", "node", ["scripts/prueba-cortafuegos.mjs"]);
 
   // 3: servicios auxiliares
