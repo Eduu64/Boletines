@@ -231,14 +231,25 @@ label { font-size: 0.84rem; font-weight: 600; display: block; margin-bottom: 4px
 
 /* v2.3.19: selector de boletines por alerta (cuadrícula de casillas) */
 .cuadricula-boletines {
-  display: grid; grid-template-columns: 1fr; gap: 7px 16px;
-  border: 1px solid var(--borde); border-radius: 10px; padding: 11px 13px;
+  display: grid; grid-template-columns: 1fr; gap: 6px;
+  border: 1px solid var(--borde); border-radius: 10px; padding: 9px;
   background: #fcfcfd; margin-bottom: 8px;
 }
 @media (min-width: 560px) { .cuadricula-boletines { grid-template-columns: 1fr 1fr; } }
 @media (min-width: 920px) { .cuadricula-boletines { grid-template-columns: 1fr 1fr 1fr; } }
-.check-boletin { display: flex; align-items: center; gap: 8px; margin: 0; font-weight: 400; font-size: 0.86rem; color: var(--tinta); cursor: pointer; }
-.check-boletin input { width: 16px; height: 16px; accent-color: var(--verde); flex-shrink: 0; margin: 0; }
+/* v2.3.22: casilla en forma de «chip» con borde y estado marcado visible
+   (antes eran etiquetas peladas dentro de la caja y en móvil se veía desordenado) */
+.check-boletin {
+  display: flex; align-items: flex-start; gap: 8px; margin: 0;
+  font-weight: 400; font-size: 0.86rem; line-height: 1.35; color: var(--tinta);
+  cursor: pointer; padding: 7px 10px; border: 1px solid var(--borde);
+  border-radius: 8px; background: var(--tarjeta);
+  transition: border-color 120ms ease, background-color 120ms ease;
+}
+.check-boletin:hover { border-color: var(--verde-borde); }
+.check-boletin:has(input:checked) { border-color: var(--verde); background: var(--verde-suave); }
+.check-boletin input { width: 16px; height: 16px; accent-color: var(--verde); flex-shrink: 0; margin: 1px 0 0; }
+@media (prefers-reduced-motion: reduce) { .check-boletin { transition: none; } }
 
 .interruptor {
   display: flex; align-items: center; justify-content: space-between;

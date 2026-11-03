@@ -293,10 +293,15 @@ let bloqueoDetectadoHasta = 0;
 
 const ES_FALLO_DE_RED = /fetch failed|timeout|aborted|terminated|network|ECONN|ETIMEDOUT|ENOTFOUND|EAI_AGAIN/i;
 
-/** Versión corta del error de una ruta, para el mensaje final. */
+/** Versión corta del error de una ruta, para el mensaje final. Si el fallo es
+ * de red conserva la CAUSA entre paréntesis (v2.3.21): «fetch failed
+ * (ECONNREFUSED 172.18.0.3:3128)» dice que el problema es el proxy, no boe.es. */
 function corto(mensaje) {
   if (/^HTTP \d{3}$/.test(mensaje)) return mensaje;
-  if (ES_FALLO_DE_RED.test(mensaje)) return "sin conexión (8 s)";
+  if (ES_FALLO_DE_RED.test(mensaje)) {
+    const causa = /\((.+)\)\s*$/.exec(mensaje)?.[1]; // admite paréntesis anidados
+    return causa ? `sin conexión (${causa})` : "sin conexión (8 s)";
+  }
   return mensaje.slice(0, 90);
 }
 

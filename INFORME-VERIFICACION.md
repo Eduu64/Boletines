@@ -1,6 +1,6 @@
 # Informe de verificación · OpoAlerta Docker (acumulativo)
 
-Fecha de verificación: **31/10/2026 (sábado)**. Entorno: sandbox de pruebas aislado con salida parcial a Internet (ver §3). La app es la subida `opoalerta-docker-v2.0.0.zip`, auditada, corregida y re-publicada como **v2.1.0**. Última sesión añadida: **2/11/2026 — verificación completa de GUI, responsive y funcionamiento (v2.3.20)**, al final del documento tras las secciones por versión.
+Fecha de verificación: **31/10/2026 (sábado)**. Entorno: sandbox de pruebas aislado con salida parcial a Internet (ver §3). La app es la subida `opoalerta-docker-v2.0.0.zip`, auditada, corregida y re-publicada como **v2.1.0**. Última sesión añadida: **2/11/2026 — verificación completa de GUI y responsive (v2.3.20) + diagnóstico de «fetch failed» en la ingesta real (v2.3.21)**, al final del documento tras las secciones por versión.
 
 ---
 
@@ -219,6 +219,31 @@ Petición del usuario: «haz verificación de responsive, de todo correcto, veri
 - **Sintaxis de todos los módulos** (`node --check` en servidor, público y frontal): correcta.
 
 **No verificable en el sandbox** (limitación del entorno, no de la app): `prueba-fuentes.mjs` (ingesta real de los 16 boletines) requiere salida a Internet hacia `boe.es` y el resto de boletines oficiales; en el sandbox no hay salida. En tu servidor con Docker sí tiene salida por el proxy y se ejecuta sola cada día con el scheduler.
+
+## «fetch failed» en la ingesta real: causas visibles y diagnóstico (v2.3.21)
+
+Síntoma real del usuario tras desplegar la v2.3.20 en su servidor (3 contenedores healthy, sin logs raros): ingesta con «✗ boe … no respondió hace poco (¿cortafuegos?)», «✗ bocm/boja/epso — fetch failed» y «– docm — sin anuncios ese día». Dos hallazgos que explican lo poco que dice ese panel:
+
+1. **El «– docm» era engañoso**: `docm.mjs` devuelve lista vacía ante CUALQUIER error de red (`catch { return [] }`, necesario para fines de semana y festivos), así que «sin datos» no prueba que ese boletín llegara. Lo coherente con esa salida es que TODAS las descargas fallaron.
+2. **«fetch failed» a secas esconde la causa**: Node envuelve el fallo real (ECONNREFUSED, ENOTFOUND, el 403 del CONNECT…) en `e.cause` anidada, y la app no la mostraba. Además el proxy registra a propósito cero logs (`access_log none`: las URLs de los webhooks llevan token), así que «sin logs raros» es lo esperado.
+
+**Qué se cambió.** Nuevo `detalleRed()`/`mensajeRed()` en `servidor/util.mjs`: recorren la cadena `e.cause` (con protección contra bucles), prefieren códigos específicos (ECONNREFUSED/ENOTFOUND/ETIMEDOUT… con dirección y puerto) y cuando el código es genérico de undici usan el mensaje más profundo («Proxy response (403) !== 200 when HTTP Tunneling»). `descargar()` y `postFormulario()` lanzan con la causa en el mensaje; el BOE conserva la causa en su «sin conexión (…)» (el extractor de paréntesis ahora admite anidados) y Discord la añade a «Sin conexión con Discord». Los errores no-red (HTTP 500, respuesta vacía) quedan intactos, y las expresiones que clasifican fallos de red siguen casando porque el mensaje conserva el prefijo «fetch failed».
+
+**Cómo se verificó (con red real simulada en el sandbox).** Tres escenarios con un Squid de juguete: proxy que deniega el CONNECT → «fetch failed (Proxy response (403) !== 200 when HTTP Tunneling)»; puerto del proxy sin nadie → «fetch failed (ECONNREFUSED 127.0.0.1:3999)»; error HTTP 500 → mensaje intacto. Y comprobado el fundamento del modo reforzado: el `fetch` de Node 24 con `NODE_USE_ENV_PROXY=1` hace el CONNECT contra el proxy (visto en un proxy de prueba que anota las peticiones). Ojo operativa: las variables `HTTP_PROXY`/`HTTPS_PROXY` se leen AL ARRANCAR el proceso de Node — no valen pruebas en caliente cambiando `process.env`.
+
+**Nuevo `scripts/diagnostico-red.sh`** para el servidor del usuario: escalera de 6 pasos (contenedores → host→internet → variables de proxy dentro de la app → app→puerto 3128 → DNS del contenedor proxy → TCP 443 desde el proxy → camino completo app→proxy→boe.es igual que la ingesta), cada paso con ✅/❌, salida real del comando y el comando de arreglo sugerido. No cambia nada del sistema.
+
+## Filtro «Estatal» dejaba pasar boletines autonómicos + rejilla de boletines (v2.3.22)
+
+Reporte del usuario: «la selección de si es estatal, local y eso me da la sensación que no lo hace bien, ya que antes puse estatal y me ponía cosas del BOE catalán o valenciano».
+
+**Causa raíz confirmada en el código.** El enriquecimiento del ámbito (`obtenerAmbitoBOE`) solo clasifica documentos del BOE; los otros 15 boletines se guardaban con ámbito NULL. El filtro de matching está diseñado a propósito para no excluir lo desconocido («no perder convocatorias»), así que DOGC (Cataluña), DOGV (C. Valenciana), BOCM… pasaban cualquier alerta, incluso las «estatal». Exactamente lo que veía el usuario. (Además `mapearAmbito` caía en «estatal» para valores tipo «Cataluña» o «Comunitat Valenciana» sin los prefijos «Comunidad Autónoma de…».)
+
+**Arreglo.** (1) `AMBITO_FIJO_POR_FUENTE` en `normalizar.mjs`: los 13 boletines autonómicos → «autonómica», CIDO (Dip. Barcelona) → «provincial»; `boe` queda fuera (enriquecimiento por documento) y `epso` no se clasifica (UE, sin categoría — pasa como hasta ahora). Aplicado como último fallback en `guardarNuevos()`. (2) Migración idempotente en `bd.mjs` al arrancar: `UPDATE Convocatoria SET ambito, enriquecido=1 WHERE fuente=X AND ambito IS NULL` — los anuncios ya guardados heredan su ámbito; verificado sobre una BD real con filas dogc/bocm/boe sembradas (dogc/bocm → «autonómica», boe intacto). (3) `mapearAmbito` reconoce los nombres de las 17 comunidades (incluidos «Catalunya», «Comunitat Valenciana», «Euskadi»), diputaciones, cabildos, consells insulares, mancomunidades y ayuntamientos; la provincia manda sobre la comunidad («Provincia de Madrid» → provincial). (4) Ayuda visible bajo el selector de Ámbito en «Alerta nueva» y «Editar» explicando la regla. (5) Nueva prueba `scripts/prueba-ambito.mjs` (26 aserciones: mapearAmbito, completitud del mapa contra IDS_FUENTES, y que el filtro excluye al autonómico con ámbito conocido pero NO al BOE sin clasificar), integrada en la batería.
+
+**Rejilla de boletines «chip»** (reporte: «los filtros por tipo de boletín se veía un poco feo»): casillas con borde, radio y resalte verde al marcarlas (`.check-boletin:has(input:checked)`), alineación superior para etiquetas de dos líneas y transición respetando `prefers-reduced-motion`.
+
+**Sobre el pcmonitor desplegado en el mismo servidor** (otro proyecto del usuario, `network_mode: host`): es un observador pasivo (lee el socket de Docker y la temperatura, envía a Discord) — no toca iptables, ni redes de Docker, ni puertos: **no interfiere con OpoAlerta**. Único aviso cruzado: si el equipo llegara a 80 °C lo apagaría (incluida la app) — mantener `SHUTDOWN_TEMP` razonable; y sus avisos de «contenedor caído» son útiles junto a OpoAlerta.
 
 ## Cortafuegos de entrada: el panel solo se sirve a la red local (v2.3.3)
 

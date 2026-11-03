@@ -2,6 +2,7 @@
 // Sin dependencias externas, fetch nativo, reintentos ante 429. Igual que v1.2.0.
 
 import { permitirSalida } from "./cortafuegos.mjs";
+import { detalleRed } from "./util.mjs";
 import { ETIQUETAS_AMBITO, ETIQUETAS_TIPO, fechaBonita } from "./normalizar.mjs";
 
 const API_DISCORD = "https://discord.com/api/v10";
@@ -75,7 +76,10 @@ async function postear(url, cabeceras, payload) {
       signal: AbortSignal.timeout(12000),
     });
   } catch (e) {
-    return { ok: false, detalle: `Sin conexión con Discord: ${e instanceof Error ? e.message : e}` };
+    // v2.3.21: con la causa real («fetch failed (ECONNREFUSED …)») se ve al
+    // instante si el problema es el proxy interno, el DNS o la propia red.
+    const causa = detalleRed(e);
+    return { ok: false, detalle: `Sin conexión con Discord: ${e instanceof Error ? e.message : e}${causa ? ` (${causa})` : ""}` };
   }
 
   // Rate limit: esperar lo que pida Discord y reintentar una vez

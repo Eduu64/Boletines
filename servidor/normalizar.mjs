@@ -46,17 +46,53 @@ export function clasificarTipo(titulo) {
   return "otro";
 }
 
-/** Mapea el ámbito del XML del BOE a una categoría simple. */
+/** Mapea el ámbito del XML del BOE a una categoría simple.
+ * v2.3.22: reconocidos también los nombres propios de las comunidades
+ * (antes, un ámbito tipo «Cataluña» o «Comunidad Valenciana» caía en el
+ * final «estatal» — el filtro estatal dejaba pasar anuncios autonómicos). */
 export function mapearAmbito(ambitoXml) {
   const a = normalizar(ambitoXml ?? "");
   if (!a) return "estatal";
-  if (a.includes("municip") || a.includes("local")) return "local";
-  if (a.includes("provincia")) return "provincial";
-  if (a.includes("comunidad autonoma") || a.includes("ciudad autonoma") || a.includes("autonomica") || a.includes("comunidad foral") || a.includes("comunidad de")) {
+  if (a.includes("municip") || a.includes("local") || a.includes("ayuntamiento")) return "local";
+  if (a.includes("provincia") || a.includes("diputacion") || a.includes("cabildo") || a.includes("consell insular") || a.includes("mancomunidad")) return "provincial";
+  const comunidad = COMUNIDADES_AUTONOMICAS.some((c) => a.includes(c));
+  if (comunidad || a.includes("comunidad autonoma") || a.includes("ciudad autonoma") || a.includes("autonomica") || a.includes("comunidad foral") || a.includes("comunidad de")) {
     return "autonomica";
   }
   return "estatal";
 }
+
+/** Nombres (sin acentos) con los que puede aparecer cada comunidad autónoma
+ * en metadatos del BOE o en el propio boletín. */
+const COMUNIDADES_AUTONOMICAS = [
+  "andalucia", "aragon", "asturias", "baleares", "balears", "canarias", "cantabria",
+  "castilla y leon", "castilla la mancha", "cataluna", "catalunya", "valenciana", "valencia",
+  "extremadura", "galicia", "madrid", "murcia", "navarra", "pais vasco", "euskadi",
+  "la rioja", "ceuta", "melilla",
+];
+
+/** Ámbito CONOCIDO POR CONSTRUCCIÓN de cada fuente no estatal (v2.3.22).
+ * El BOE se clasifica documento a documento (enriquecimiento XML); el resto
+ * de boletines ES de una comunidad (o diputación) y antes se guardaba sin
+ * ámbito — con lo que pasaban cualquier filtro, incluso «estatal» (el usuario
+ * veía DOGC/DOGV/BOCM en una alerta estatal). «boe» y «epso» quedan fuera:
+ * el BOE usa el enriquecimiento y EPSO (UE) no tiene categoría. */
+export const AMBITO_FIJO_POR_FUENTE = {
+  bocm: "autonomica", // Comunidad de Madrid
+  boja: "autonomica", // Andalucía
+  dogv: "autonomica", // C. Valenciana
+  dogc: "autonomica", // Cataluña
+  bocyl: "autonomica", // Castilla y León
+  doe: "autonomica", // Extremadura
+  boib: "autonomica", // Baleares
+  boa: "autonomica", // Aragón
+  boc: "autonomica", // Canarias
+  bopv: "autonomica", // País Vasco
+  dog: "autonomica", // Galicia
+  docm: "autonomica", // Castilla-La Mancha
+  bopa: "autonomica", // Asturias
+  cido: "provincial", // Diputación de Barcelona
+};
 
 export const ETIQUETAS_TIPO = {
   convocatoria: "Convocatoria",

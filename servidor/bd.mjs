@@ -7,6 +7,7 @@ import { DatabaseSync } from "node:sqlite";
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { randomUUID } from "node:crypto";
+import { AMBITO_FIJO_POR_FUENTE } from "./normalizar.mjs"; // backfill de ámbito (v2.3.22)
 
 const RUTA = (() => {
   const cruda = process.env.DATABASE_URL || "file:/app/data/opoalerta.db";
@@ -128,6 +129,20 @@ export function asegurarEsquema() {
   // NULL/vacío = todos los boletines activos, comportamiento anterior).
   if (!columnasDe("Alerta").has("boletines")) {
     bd.exec(`ALTER TABLE "Alerta" ADD COLUMN "boletines" TEXT`);
+  }
+  // v2.3.22: backfill del ámbito fijo de los boletines autonómicos/provinciales.
+  // Antes esos anuncios se guardaban con ámbito NULL y pasaban CUALQUIER filtro
+  // (p. ej. una alerta «estatal» mostraba DOGC/DOGV/BOCM). Idempotente: solo
+  // toca filas con ámbito desconocido, y no toca al BOE (se clasifica por
+  // documento con el enriquecimiento).
+  try {
+    const actualizar = bd.prepare(`UPDATE "Convocatoria" SET "ambito" = ?, "enriquecido" = 1 WHERE "fuente" = ? AND "ambito" IS NULL`);
+    for (const [fuenteId, ambito] of Object.entries(AMBITO_FIJO_POR_FUENTE)) {
+      actualizar.run(ambito, fuenteId);
+    }
+  } catch {
+    // si la tabla aún no existe (primer arranque) no pasa nada: el DDL de
+    // arriba ya la creó y los INSERT llevarán su ámbito desde el principio.
   }
 }
 

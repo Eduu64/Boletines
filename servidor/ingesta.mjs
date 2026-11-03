@@ -6,7 +6,7 @@
 import { obtenerFila, todas, ejecutar, nuevoId, fechaPublicacionIso, hoyIsoUtc, bd } from "./bd.mjs";
 import { consultarFuentes, normalizarFuentesActivas } from "./fuentes/index.mjs";
 import { obtenerAmbitoBOE, boeDirectoOk } from "./fuentes/boe.mjs";
-import { clasificarTipo, mapearAmbito } from "./normalizar.mjs";
+import { clasificarTipo, mapearAmbito, AMBITO_FIJO_POR_FUENTE } from "./normalizar.mjs";
 import { itemCoincide, boletinesDe } from "./matching.mjs";
 import { construirPayload, enviarBot, enviarWebhook, payloadPrueba } from "./discord.mjs";
 import { itemsDemo, ambitoDemo } from "./demo.mjs";
@@ -81,7 +81,11 @@ function guardarNuevos(fuente, fecha, items, ambitoPorId) {
     const existe = obtenerFila(`SELECT 1 FROM Convocatoria WHERE identificador = ?`, identificador);
     if (existe) continue;
     const tipo = clasificarTipo(it.titulo);
-    const tipoAmbito = it.tipoAmbitoOverride ?? (ambitoPorId.get(it.identificador) ?? null);
+    // Ámbito: override explícito (demo) > enriquecimiento del BOE (por documento)
+    // > ámbito conocido de la fuente (v2.3.22: DOGC/DOGV/BOCM… son autonómicos
+    // por definición — antes se guardaban sin ámbito y pasaban filtros «estatal»)
+    // > sin ámbito (BOE sin clasificar, EPSO): no excluye en ningún filtro.
+    const tipoAmbito = it.tipoAmbitoOverride ?? (ambitoPorId.get(it.identificador) ?? null) ?? AMBITO_FIJO_POR_FUENTE[fuente] ?? null;
     try {
       const id = nuevoId();
       ejecutar(

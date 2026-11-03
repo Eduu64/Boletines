@@ -13,6 +13,49 @@ export function dormir(ms) {
   return new Promise((r) => setTimeout(r, ms));
 }
 
+// ─── Detalle de errores de red (v2.3.21) ────────────────────────────────────
+// El fetch de Node envuelve los fallos de red en un genérico «fetch failed»
+// y esconde la causa real (ECONNREFUSED, ENOTFOUND, ETIMEDOUT, certificados…)
+// en e.cause (a veces anidada varias veces dentro de undici). Sin ese detalle,
+// un «fetch failed» a secas no dice si el problema es el proxy interno, el DNS
+// o el portal — que es justo lo que hay que saber para diagnosticar.
+
+/** Extrae la causa raíz útil de un error de red («ECONNREFUSED 10.0.0.5:3128»)
+ * o cadena vacía si no hay nada aprovechable. Los códigos genéricos de undici
+ * (UND_ERR_ABORTED…) se saltan a favor del mensaje específico más profundo,
+ * p. ej. «Proxy response (403) !== 200 when HTTP Tunneling» cuando Squid
+ * deniega el dominio. */
+const CODIGOS_GENERICOS = new Set(["UND_ERR_ABORTED", "RequestAbortedError", "AbortError", "UND_ERR_SOCKET"]);
+
+export function detalleRed(e) {
+  let c = e?.cause;
+  const vistos = new Set();
+  let especifico = ""; // el mensaje más informativo visto en la cadena
+  while (c && !vistos.has(c)) {
+    vistos.add(c);
+    const msg = String(c.message ?? "");
+    if (msg && !/^(fetch failed|Request was cancelled)/i.test(msg)) especifico = msg;
+    const codigo = c.code;
+    if (codigo && codigo !== "Error" && codigo !== 0 && !CODIGOS_GENERICOS.has(codigo)) {
+      const donde = c.address || c.hostname || c.host || "";
+      const puerto = c.port ? `:${c.port}` : "";
+      return `${codigo}${donde ? ` ${donde}${puerto}` : ""}`;
+    }
+    c = c.cause;
+  }
+  return especifico.slice(0, 90);
+}
+
+/** Mensaje de un error de red con la causa añadida: «fetch failed
+ * (ECONNREFUSED 172.18.0.3:3128)». Si el error no trae causa útil, devuelve
+ * el mensaje original intacto (HTTP 502, respuesta vacía… no se tocan). */
+export function mensajeRed(e) {
+  const base = e instanceof Error ? e.message : String(e);
+  const extra = detalleRed(e);
+  if (!extra || base.includes(extra)) return base;
+  return `${base} (${extra})`;
+}
+
 /** Descarga un recurso y devuelve el texto decodificado. Lanza si fallan todos los intentos.
  * timeoutMs/intentos/pausaMs son ajustables: la fuente BOE usa una conexión
  * corta por endpoint para poder probar sus 4 accesos directos (una sola
@@ -45,7 +88,9 @@ export async function descargar(url, opciones = {}) {
       if (i < intentos - 1) await dormir(pausaMs);
     }
   }
-  throw ultimoError instanceof Error ? ultimoError : new Error(String(ultimoError));
+  // v2.3.21: el mensaje lleva la causa real de red (p. ej. «fetch failed
+  // (ECONNREFUSED 172.18.0.3:3128)» → el proxy no está vivo o no hay ruta).
+  throw new Error(mensajeRed(ultimoError));
 }
 
 export async function descargarJson(url, cabeceras = {}) {
@@ -60,17 +105,23 @@ export async function descargarJson(url, cabeceras = {}) {
 /** POST form-urlencoded que devuelve JSON parseado. */
 export async function postFormulario(url, cuerpo, cabeceras = {}) {
   permitirSalida(url); // cortafuegos de salida
-  const res = await fetch(url, {
-    method: "POST",
-    headers: {
-      "User-Agent": UA_OPOALERTA,
-      Accept: "application/json",
-      "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
-      ...cabeceras,
-    },
-    body: new URLSearchParams(cuerpo).toString(),
-    signal: AbortSignal.timeout(TIMEOUT_MS),
-  });
+  let res;
+  try {
+    res = await fetch(url, {
+      method: "POST",
+      headers: {
+        "User-Agent": UA_OPOALERTA,
+        Accept: "application/json",
+        "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+        ...cabeceras,
+      },
+      body: new URLSearchParams(cuerpo).toString(),
+      signal: AbortSignal.timeout(TIMEOUT_MS),
+    });
+  } catch (e) {
+    // v2.3.21: «fetch failed (ECONNREFUSED …)» en vez de un «fetch failed» a secas
+    throw new Error(mensajeRed(e));
+  }
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return res.json();
 }

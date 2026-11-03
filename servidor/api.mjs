@@ -27,7 +27,7 @@ import { itemCoincide, boletinesDe } from "./matching.mjs";
 import { permitirEntrada, cortafuegosActivo, cortafuegosEntradaActivo } from "./cortafuegos.mjs";
 import { fechaBonita } from "./normalizar.mjs";
 
-const VERSION = "2.3.20";
+const VERSION = "2.3.22";
 const RAIZ_PUBLICO = join(fileURLToPath(new URL(".", import.meta.url)), "..", "publico");
 const TAM_PAGINA = 20;
 const MAX_CUERPO = 256 * 1024;

@@ -1,4 +1,4 @@
-# OpoAlerta Docker v2.3.20
+# OpoAlerta Docker v2.3.22
 
 Alertas personales de **ofertas de empleo público** (oposiciones, personal laboral, bolsas): ingesta diaria del **BOE y de 15 boletines oficiales más**, panel web local y avisos automáticos a **Discord**.
 
@@ -19,6 +19,17 @@ node servidor/indice.mjs    # panel en http://localhost:3000
 ```
 
 ---
+
+## Novedades v2.3.22
+
+- **Arreglado: el filtro «Estatal» dejaba pasar boletines autonómicos** («antes puse estatal y me ponía cosas del BOE catalán o valenciano»): el enriquecimiento del ámbito solo clasifica documentos del BOE — los otros 15 boletines se guardaban **sin ámbito** y el filtro, para no perder avisos, no excluye lo desconocido → DOGC, DOGV, BOCM… entraban en alertas estatales. Ahora cada boletín no estatal lleva su ámbito **por definición**: los 13 autonómicos cuentan como Autonómico y CIDO (Dip. Barcelona) como Provincial; el BOE sigue clasificándose documento a documento y lo que no se pueda clasificar no se excluye (igual que antes). Migración automática al arrancar: los anuncios ya guardados de esas fuentes reciben su ámbito (no toca al BOE). Además `mapearAmbito` ahora reconoce los nombres de las comunidades («Cataluña», «Comunitat Valenciana»… antes caían en el final «estatal»), diputaciones y cabildos. Nueva prueba `scripts/prueba-ambito.mjs` (26 aserciones, integrada en la batería). El formulario de alertas lo explica bajo el selector de Ámbito.
+- **Rejilla de boletines como «chips»**: las casillas del selector «Boletines a vigilar» (Alerta nueva y Editar) tienen borde propio y se resaltan al marcarlas — antes eran etiquetas peladas y se veía desordenado, sobre todo en móvil (reportado por el usuario).
+
+## Novedades v2.3.21
+
+- **Diagnóstico de red cuando todo dice «fetch failed»**: la ingesta del modo reforzado fallaba con un «fetch failed» genérico que no decía si el problema era el proxy, el DNS o el portal (y el DOCM además traga su error de red a propósito para los días sin boletín, así que un «– docm: sin datos» no prueba que la red funcione — ojo con eso al leer el panel). Ahora **cada error de red lleva la causa real entre paréntesis**: «fetch failed (ECONNREFUSED 172.18.0.3:3128)» = el Squid no vive ahí; «fetch failed (Proxy response (403) !== 200 when HTTP Tunneling)» = el proxy deniega el dominio; «ENOTFOUND/EAI_AGAIN» = DNS roto; «HTTP 500» y demás errores no-red quedan intactos. Aplica a las fuentes (con el BOE conservando la causa en su «sin conexión (…)») y a Discord («Sin conexión con Discord: … (causa)»).
+- **Nuevo `scripts/diagnostico-red.sh`**: prueba EN ORDEN cada eslabón en tu servidor — contenedores, host→internet, variables de proxy dentro de la app, app→proxy, DNS del proxy, proxy→internet (TCP 443) y el camino completo app→proxy→boe.es igual que la ingesta — y para cada fallo imprime la causa probable y el comando de arreglo. Ejecútalo cuando la ingesta no baje anuncios: `bash scripts/diagnostico-red.sh` (con sudo si Docker lo pide) y pega la salida completa si pides ayuda.
+- Verificado con pruebas reales de red: proxy que deniega el CONNECT → «Proxy response (403)…»; puerto del proxy muerto → «ECONNREFUSED ip:puerto»; error HTTP (500) → intacto. Además comprobado que el `fetch` de Node 24 honra `NODE_USE_ENV_PROXY` (el CONNECT llega al proxy), que es la base de todo el modo reforzado.
 
 ## Novedades v2.3.20
 
@@ -283,5 +294,7 @@ node scripts/prueba-fuentes.mjs 20261031    # ingesta real de los 16 boletines (
 - **v2.3.18**: el frontal corta al instante los intentos https del móvil (primer byte TLS = cierre limpio; adiós al «ERR_TOO_MANY_RETRIES / inactiva o trasladada» cuando Chrome sube http a https por su cuenta) y multi-dispositivo confirmado por diseño.
 - **v2.3.19**: boletines seleccionables por alerta (cuadrícula de los 16 en «Alerta nueva» y «Editar»; vacío = todos, retrocompatible; API con validación de ids y «Probar» respetando el filtro).
 - **v2.3.20**: arreglo crítico del panel de la v2.3.19 («Cargando…» eterno por un `$("#a-boletines")` con `#` que `getElementById` no entiende; el helper ahora acepta ambos) + verificación completa de GUI, responsive y funcionamiento con navegador real.
+- **v2.3.22**: filtro «Estatal» arreglado (los boletines autonómicos llevan ámbito por definición; migración automática de lo ya guardado) + rejilla de boletines estilo chip.
+- **v2.3.21**: errores de red con la causa real («fetch failed (ECONNREFUSED …)» en vez de un «fetch failed» mudo) y `scripts/diagnostico-red.sh` para saber en un minuto qué eslabón falla (host, proxy, DNS o portal) cuando la ingesta no baja anuncios.
 
 Datos de los boletines oficiales: reutilización permitida citando la fuente (ver licencia de cada uno en el panel). Código inspirado en [opoalerta/opoalerta](https://github.com/opoalerta/opoalerta).
